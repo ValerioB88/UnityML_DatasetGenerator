@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags: []
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - 
+  - 
+  - Obj0
+  - Obj1
+  - Obj2
+  - Obj3
+  - Obj4
+  - Obj5
+  - Obj6
+  - Obj7
+  - Obj8
+  - Obj9
+  - Obj10
+  - Obj12
+  - Obj13
+  - Obj14
+  - Obj15
+  - Obj16
+  - Obj17
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
