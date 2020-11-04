@@ -397,7 +397,7 @@ public class MetaLearningTask : Agent
             var cosAngleCameraQuery = RandomCosFromAngle(minDegreeQueryCamera, maxDegreeQueryCamera);
             // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
             standardQueryCamera[k].transform.position = objPos + GetRandomAroundSphere(cosAngleCameraQuery, directionCameraQuery, Vector3.up) * distance;
-            standardQueryCamera[k].transform.LookAt(objToLookAt.transform);
+            standardQueryCamera[k].transform.LookAt(objToLookAt.transform, Vector3.up);
             //standardPositionTestingCameras.Add();
 
             var sQcPos = standardQueryCamera[k].transform.position;
@@ -410,7 +410,7 @@ public class MetaLearningTask : Agent
                     GetRandomAroundSphere(scatterCosAngle, directionCameraQuery + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
 
 
-                queryCameras[queryIndex].transform.LookAt(objToLookAt, standardQueryCamera[k].transform.up);
+                queryCameras[queryIndex].transform.LookAt(objToLookAt, Vector3.up);
                 queryCameras[queryIndex].GetComponent<Camera>().cullingMask = 1 << (8 + k);
                 labelsTesting.Add(mapNameToNum[cloneObjs[k].name]);
                 debugPointsQuery.Add(queryCameras[queryIndex].transform.position);
@@ -424,7 +424,7 @@ public class MetaLearningTask : Agent
                  Mathf.Min(maxDegreeSupportCamera, Mathf.Acos(cosAngleCameraQuery) * Mathf.Rad2Deg + maxDegreeSQcameras));
 
             standardSupportCamera[k].transform.position = objPos + GetRandomAroundSphere(cosAngleSQcamera, directionCameraSupport, Vector3.up) * distance;
-            standardSupportCamera[k].transform.LookAt(objToLookAt.transform);
+            standardSupportCamera[k].transform.LookAt(objToLookAt.transform, Vector3.up);
             var sScPos = standardSupportCamera[k].transform.position;
 
             // Move the support cameras
@@ -436,7 +436,7 @@ public class MetaLearningTask : Agent
                 supportCameras[n + N * k].transform.position = objPos +
                     GetRandomAroundSphere(scatterCosAngle, directionCameraSupport + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
 
-                supportCameras[n + N * k].transform.LookAt(objToLookAt.transform, standardQueryCamera[k].transform.up);
+                supportCameras[n + N * k].transform.LookAt(objToLookAt.transform, Vector3.up);
                 supportCameras[n + N * k].GetComponent<Camera>().cullingMask = 1 << (8 + k);
                 labelsSupport.Add(mapNameToNum[cloneObjs[k].name]);
                 debugPointsSupport.Add(supportCameras[n + N * k].transform.position);
