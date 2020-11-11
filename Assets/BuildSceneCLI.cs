@@ -12,7 +12,7 @@ using UnityEngine.UI;
 class BuildSceneCLI : MonoBehaviour
 {
 
-    public static int N = 5;
+    public static int N = 1;
     public static int K = 2;
     public static int Q = 1;
     public static int sizeCanvas = 64;
@@ -31,8 +31,6 @@ class BuildSceneCLI : MonoBehaviour
         supportCameras.Clear();
         GameObject cameraContainer = GameObject.Find("CameraContainer");
         GameObject agent = GameObject.Find("Agent");
-        UnityEngine.Debug.Log("CAMERA CONTAINER: ");
-        UnityEngine.Debug.Log(cameraContainer);
         int childs = cameraContainer.transform.childCount;
         for (int i = childs - 1; i >= 0; i--)
         {
@@ -110,8 +108,9 @@ class BuildSceneCLI : MonoBehaviour
             cmtmp.Height = sizeCanvas;
         }
 
-
-        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = N * K + K * Q;
+        // Includes labels, and N*K+K*Q vector3s
+        //UnityEngine.Debug.Log((N * K + K * Q) + 3 * (N * K + K * Q));
+        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize =  ( N * K + K * Q ) + 3 * (N * K + K * Q);
 
     }
 

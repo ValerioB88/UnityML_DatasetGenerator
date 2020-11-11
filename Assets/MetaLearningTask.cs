@@ -37,7 +37,11 @@ public class MetaLearningTask : Agent
     List<Vector3> positions = new List<Vector3>();
     List<int> labelsSupport = new List<int>();
     List<int> labelsTesting = new List<int>();
+    
 
+    [SerializeField]
+    public bool gizmoCameraHistory = true;
+    public bool gizmoCamHistoryRelative = true;
     int N;
     int K;
     int Q;
@@ -46,16 +50,19 @@ public class MetaLearningTask : Agent
     GameObject info;
     List<GameObject> supportCameras = new List<GameObject>();
     List<GameObject> queryCameras = new List<GameObject>();
+    List<Vector3> supportRelativePosition = new List<Vector3>();
 
     // The position used to scatter other camera around, one for each object k 
     List<Vector3> standardPositionTestingCameras = new List<Vector3>();
-    List<Vector3> standardPositionSupportCameras = new List<Vector3>();
-    public float distance;
+    float distance;
     List<Vector3> debugPointsSupport = new List<Vector3>();
     List<Vector3> debugPointsQuery = new List<Vector3>();
+    List<Vector3> debugPointSupportRelative = new List<Vector3>();
 
-    bool firstEpisode = true;
+    List<Vector3> supportCameraPosRelativeToObj = new List<Vector3>();
+    List<Vector3> queryCameraPosRelativeToObj = new List<Vector3>();
 
+    public int numEpisodes = 0;
 
     List<GameObject> standardQueryCamera = new List<GameObject>();
     List<GameObject> standardSupportCamera = new List<GameObject>();
@@ -157,7 +164,6 @@ public class MetaLearningTask : Agent
         }
 
 
-
         UnityEngine.Debug.Log("ATTENZIONE");
         var cmlNameDataset = GetArg("-name_dataset");
         if (!(cmlNameDataset == null))
@@ -172,13 +178,14 @@ public class MetaLearningTask : Agent
 
 
         // Rebuild the list
-
         int totIndex = 0;
         for (int k = 0; k < K; k++)
         {
             for (int n = 0; n < N; n++)
             {
                 supportCameras.Add(cameraContainer.transform.Find(totIndex.ToString("D3") + "_SupportCamera").gameObject);
+                supportCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
+                supportRelativePosition.Add(new Vector3(0f, 0f, 0f));
                 totIndex += 1;
             }
         }
@@ -188,6 +195,7 @@ public class MetaLearningTask : Agent
             for (int q = 0; q < Q; q++)
             {
                 queryCameras.Add(cameraContainer.transform.Find(totIndex.ToString("D3") + "_QueryCamera").gameObject);
+                queryCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
                 totIndex += 1;
             }
         }
@@ -202,13 +210,14 @@ public class MetaLearningTask : Agent
         {
             positions.Add(new Vector3(10 * k, 0, 0));
         }
-
+        Random.InitState(5); // DELETE
 
 
     }
 
     void OnDrawGizmos()
     {
+        int index = 0;
         Gizmos.color = new Vector4(0, 0, 1F, 0.5F);
         foreach (GameObject cam in supportCameras)
         {
@@ -256,20 +265,50 @@ public class MetaLearningTask : Agent
             Gizmos.DrawWireSphere(standardSupportCamera[k].transform.position, 0.1F);
         }
 
-        foreach (Vector3 vec in debugPointsQuery)
+        if (gizmoCameraHistory)
         {
 
-            Gizmos.color = new Vector4(0F, 1F, 0, 0.5F);
-            Gizmos.DrawSphere(vec, 0.1F);
-            Gizmos.DrawWireSphere(vec, 0.1F);
+            index = 0;
+            foreach (Vector3 vec in debugPointsSupport)
+            {
+
+                Gizmos.color = new Vector4(0F, 0F, 1F, 0.5F);
+                Gizmos.DrawSphere(vec, 0.1F);
+                Gizmos.DrawWireSphere(vec, 0.1F);
+                Gizmos.DrawLine(positions[(int)(index / N) % K], vec);
+                index += 1;
+            }
+            index = 0;
+            foreach (Vector3 vec in debugPointsQuery)
+            {
+
+                Gizmos.color = new Vector4(0F, 1F, 0, 0.5F);
+                Gizmos.DrawSphere(vec, 0.1F);
+                Gizmos.DrawWireSphere(vec, 0.1F);
+                Gizmos.DrawLine(positions[(int)(index / Q) % K], vec);
+                index += 1;
+
+            }
         }
-
-        foreach (Vector3 vec in debugPointsSupport)
+        if (gizmoCamHistoryRelative)
         {
+            foreach (Vector3 vec in debugPointSupportRelative)
+            {
+                Gizmos.color = new Vector4(1F, 0F, 0f, 1f);
+                Gizmos.DrawSphere(vec, 0.1F);
+                Gizmos.DrawWireSphere(vec, 0.1F);
 
-            Gizmos.color = new Vector4(0F, 0F, 1F, 0.5F);
-            Gizmos.DrawSphere(vec, 0.1F);
-            Gizmos.DrawWireSphere(vec, 0.1F);
+            }
+        }
+        index = 0;
+        foreach (Vector3 vec in supportRelativePosition)
+        {
+            Gizmos.color = new Vector4(1F, 0F, 0f, 1f);
+            Gizmos.DrawSphere(vec, 0.5F);
+            Gizmos.DrawWireSphere(vec, 0.5F);
+            Gizmos.DrawLine(positions[(int)(index / N) % K], positions[(int)(index / N) % K] + distance * Vector3.forward);
+            Gizmos.DrawLine(positions[(int)(index / N) % K], vec);
+            index += 1;
         }
 
     }
@@ -290,27 +329,36 @@ public class MetaLearningTask : Agent
         //        angleA -= 1;
         //    }
         //}
-        var v = direction; //Random.Range(minDirection, maxDirection);
+        //var v = direction; //Random.Range(minDirection, maxDirection);
         //var a = Mathf.Cos(Mathf.Deg2Rad * angleA);
         //var b = Mathf.Cos(Mathf.Deg2Rad * angleB);
 
-        float azimuth = v * 2.0F * UnityEngine.Mathf.PI;
-        float cosDistFromZenith = angle; //Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
-        float sinDistFromZenith = UnityEngine.Mathf.Sqrt(1.0F - cosDistFromZenith * cosDistFromZenith);
-        Vector3 pqr = new Vector3(UnityEngine.Mathf.Cos(azimuth) * sinDistFromZenith, UnityEngine.Mathf.Sin(azimuth) * sinDistFromZenith, cosDistFromZenith);
+        // direction in DEGREES
+
+        float azimuth = direction * Mathf.Deg2Rad; // * 2.0F * UnityEngine.Mathf.PI;
+        float cosDistFromZenith = Mathf.Cos(angle * Mathf.Deg2Rad); //Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
+        float sinDistFromZenith = Mathf.Sqrt(1.0F - cosDistFromZenith * cosDistFromZenith);
+        Vector3 pqr = new Vector3(Mathf.Cos(azimuth) * sinDistFromZenith, UnityEngine.Mathf.Sin(azimuth) * sinDistFromZenith, cosDistFromZenith);
         Vector3 rAxis = aroundPosition; // Vector3.up when around zenith
-        Vector3 pAxis = UnityEngine.Mathf.Abs(rAxis[0]) < 0.9 ? new Vector3(1F, 0F, 0F) : new Vector3(0F, 1F, 0F);
+        Vector3 pAxis = Mathf.Abs(rAxis[0]) < 0.9 ? new Vector3(1F, 0F, 0F) : new Vector3(0F, 1F, 0F);
         Vector3 qAxis = Vector3.Normalize(Vector3.Cross(rAxis, pAxis));
         pAxis = Vector3.Cross(qAxis, rAxis);
         Vector3 position = pqr[0] * pAxis + pqr[1] * qAxis + pqr[2] * rAxis;
         return position;
     }
 
-    float RandomCosFromAngle(float minAngle, float maxAngle)
+    float RandomAngle(float angleA, float angleB, float minRange, float maxRange)
     {
-        var a = Mathf.Cos(Mathf.Deg2Rad * minAngle);
-        var b = Mathf.Cos(Mathf.Deg2Rad * maxAngle);
-        return Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
+        //var a = Mathf.Cos(Mathf.Deg2Rad * minAngle);
+        //var b = Mathf.Cos(Mathf.Deg2Rad * maxAngle);
+
+        var boundedA = Mathf.Min(Mathf.Max(angleA, minRange), maxRange);
+        var boundedB = Mathf.Min(Mathf.Max(angleB, minRange), maxRange);
+
+        var min = Mathf.Min(boundedA, boundedB);
+        var max = Mathf.Max(boundedA, boundedB);
+        return Random.Range(min, max);
+        //return Mathf.Cos(Random.Range(min, max) * Mathf.Deg2Rad);
     }
 
     //public Transform Target;
@@ -330,35 +378,48 @@ public class MetaLearningTask : Agent
         // to values provided by the channels minDegreeSQcameras and maxDegreeSQcameras.
         // Finally scatter support cameras around the random pos. supp. cam. according to "scatterCameraDegree". 
 
-        float scatterCameraDegrees = 10; // NORMALLY 10 // this is fixed
-        float scatterCameraDirection = 0.1F;  // Normally 0.1 
+        float scatterCameraDegrees = 30; // In Degree 30 
+        float scatterCameraDirection = 30F;  // In Degree  30
 
         var envParameters = Academy.Instance.EnvironmentParameters;
         distance = envParameters.GetWithDefault("distance", 4.0f);
 
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relatvie to the world)
-        float minDegreeQueryCamera = envParameters.GetWithDefault("minDegreeQueryCameras", 0); // not sent from unity, not useful
-        float maxDegreeQueryCamera = envParameters.GetWithDefault("maxDegreeQueryCameras", 1f);
+        float minDegreeQueryCamera = envParameters.GetWithDefault("minDegreeQueryCameras", 20f); // 
+        float maxDegreeQueryCamera = envParameters.GetWithDefault("maxDegreeQueryCameras", 130f); // 120
 
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relatvie to the world)
-        float minDegreeSupportCamera = envParameters.GetWithDefault("minDegreSupportCamera", 0); // not sent from unity, not useful
-        float maxDegreeSupportCamera = envParameters.GetWithDefault("maxDegreSupportCamera", 180f);
+        float minDegreeSupportCamera = envParameters.GetWithDefault("minDegreeSupportCamera", 20f);
+        float maxDegreeSupportCamera = envParameters.GetWithDefault("maxDegreeSupportCamera", 130f); //120
 
 
         // This goes from -180 to +180 (where 0 is the position of the query camera)
-        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -180f);
+        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -180F);
         float maxDegreeSQcameras = envParameters.GetWithDefault("maxDegreeSQcameras", 180F);
 
-        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcamera", -0.1f);
-        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcamera", 0.1f); // from -0.5 to 0.5
+        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcamera", -45); // IN DEGREE -180, 180
+        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcamera", 45f); //
 
+        float minDirectionCameraQuery = envParameters.GetWithDefault("minDirectionCameraQuery", -180f); // IN DEGREE -180, 180
+        float maxDirectionCameraQuery = envParameters.GetWithDefault("maxDirectionCameraQuery", 180f); //
 
+        Assert.IsTrue(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeSupportCamera && maxDegreeQueryCamera + minDegreeSQcameras < maxDegreeSupportCamera);
+        if (!(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeSupportCamera && maxDegreeQueryCamera + minDegreeSQcameras < maxDegreeSupportCamera))
+        {
+            UnityEngine.Debug.Log("CAMERAS ARE NOT PLACED PROPERLY.");
+            Application.Quit(1);
+
+        }
 
         selectedObjs.Clear();
         cloneObjs.Clear();
-        standardPositionTestingCameras.Clear();
-        standardPositionSupportCameras.Clear();
 
+        if (numEpisodes % 500 == 0)
+        {
+            debugPointsQuery.Clear();
+            debugPointsSupport.Clear();
+            debugPointSupportRelative.Clear();
+        }
         GameObject episodeContainer = new GameObject("Episode Container");
         // Draw K classes from the list
         List<int> listNumbers = new List<int>();
@@ -386,6 +447,7 @@ public class MetaLearningTask : Agent
 
         // Place the query Cameras somewhere facing the object, looking at it
         int queryIndex = 0;
+
         for (int k = 0; k < K; k++)
         {
             var objToLookAt = cloneObjs[k].transform.GetChild(0);
@@ -393,55 +455,61 @@ public class MetaLearningTask : Agent
 
             var objPos = cloneObjs[k].transform.position;
             // Thi should be -0.5F, 0.5F or 0F, 1F
-            var directionCameraQuery = Random.Range(0F, 1F);
-            var cosAngleCameraQuery = RandomCosFromAngle(minDegreeQueryCamera, maxDegreeQueryCamera);
+            var directionCameraQuery = Random.Range(minDirectionCameraQuery, maxDirectionCameraQuery);
+            var angleCameraQuery = RandomAngle(minDegreeQueryCamera, maxDegreeQueryCamera, minDegreeQueryCamera, maxDegreeQueryCamera);
             // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
-            standardQueryCamera[k].transform.position = objPos + GetRandomAroundSphere(cosAngleCameraQuery, directionCameraQuery, Vector3.up) * distance;
+            standardQueryCamera[k].transform.position = objPos + GetRandomAroundSphere(angleCameraQuery, directionCameraQuery, Vector3.up) * distance;
             standardQueryCamera[k].transform.LookAt(objToLookAt.transform, Vector3.up);
-            //standardPositionTestingCameras.Add();
 
-            var sQcPos = standardQueryCamera[k].transform.position;
+
             for (int q = 0; q < Q; q++)
             {
-                var scatterCosAngle = RandomCosFromAngle(Mathf.Max(minDegreeQueryCamera, Mathf.Acos(cosAngleCameraQuery) * Mathf.Rad2Deg - scatterCameraDegrees / 2),
-                 Mathf.Min(maxDegreeQueryCamera, Mathf.Acos(cosAngleCameraQuery) * Mathf.Rad2Deg + scatterCameraDegrees / 2));
+                var scatterQueryAngle = RandomAngle(angleCameraQuery - scatterCameraDegrees / 2, angleCameraQuery + scatterCameraDegrees / 2, minDegreeQueryCamera, maxDegreeQueryCamera);
 
                 queryCameras[queryIndex].transform.position = objPos +
-                    GetRandomAroundSphere(scatterCosAngle, directionCameraQuery + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
+                    GetRandomAroundSphere(scatterQueryAngle, directionCameraQuery + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
 
 
                 queryCameras[queryIndex].transform.LookAt(objToLookAt, Vector3.up);
                 queryCameras[queryIndex].GetComponent<Camera>().cullingMask = 1 << (8 + k);
+                queryCameraPosRelativeToObj[queryIndex] = queryCameras[queryIndex].transform.position - objPos;
                 labelsTesting.Add(mapNameToNum[cloneObjs[k].name]);
                 debugPointsQuery.Add(queryCameras[queryIndex].transform.position);
 
                 queryIndex += 1;
             }
 
-            var directionCameraSupport = Mathf.Min(directionCameraQuery + Random.Range(minDirectionSQcameras, maxDirectionSQcameras), 1);
-            //var minDegree = 
-            var cosAngleSQcamera = RandomCosFromAngle(Mathf.Max(minDegreeSupportCamera, Mathf.Acos(cosAngleCameraQuery) * Mathf.Rad2Deg + minDegreeSQcameras),
-                 Mathf.Min(maxDegreeSupportCamera, Mathf.Acos(cosAngleCameraQuery) * Mathf.Rad2Deg + maxDegreeSQcameras));
+            var directionCameraSupport = (directionCameraQuery + Random.Range(minDirectionSQcameras, maxDirectionSQcameras));
+            //Mathf.Min(directionCameraQuery + Random.Range(minDirectionSQcameras, maxDirectionSQcameras), 1);
 
-            standardSupportCamera[k].transform.position = objPos + GetRandomAroundSphere(cosAngleSQcamera, directionCameraSupport, Vector3.up) * distance;
+            var angleSQcamera = RandomAngle(angleCameraQuery + minDegreeSQcameras, angleCameraQuery + maxDegreeSQcameras, minDegreeSupportCamera, maxDegreeSupportCamera);
+
+            standardSupportCamera[k].transform.position = objPos + GetRandomAroundSphere(angleSQcamera, directionCameraSupport, Vector3.up) * distance;
             standardSupportCamera[k].transform.LookAt(objToLookAt.transform, Vector3.up);
+
             var sScPos = standardSupportCamera[k].transform.position;
 
             // Move the support cameras
             for (int n = 0; n < N; n++)
             {
-                var scatterCosAngle = RandomCosFromAngle(Mathf.Max(minDegreeSupportCamera, Mathf.Acos(cosAngleSQcamera) * Mathf.Rad2Deg - scatterCameraDegrees / 2),
-                 Mathf.Min(maxDegreeSupportCamera, Mathf.Acos(cosAngleSQcamera) * Mathf.Rad2Deg + scatterCameraDegrees / 2));
+                var scatterSupportAngle = RandomAngle(angleSQcamera - scatterCameraDegrees / 2, angleSQcamera + scatterCameraDegrees / 2, minDegreeSupportCamera, maxDegreeSupportCamera);
                 // Scatter them around the standardPositionSupportCamera point
                 supportCameras[n + N * k].transform.position = objPos +
-                    GetRandomAroundSphere(scatterCosAngle, directionCameraSupport + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
-
+                    GetRandomAroundSphere(scatterSupportAngle, directionCameraSupport + Random.Range(-scatterCameraDirection / 2, scatterCameraDirection / 2), Vector3.up) * distance;
                 supportCameras[n + N * k].transform.LookAt(objToLookAt.transform, Vector3.up);
                 supportCameras[n + N * k].GetComponent<Camera>().cullingMask = 1 << (8 + k);
+                supportCameraPosRelativeToObj[n + N * k] = supportCameras[n + N * k].transform.position - objPos;
+
+                supportRelativePosition[n + N * k] = objPos + (Quaternion.FromToRotation(standardQueryCamera[k].transform.position - objPos, (Vector3.forward * distance)) * (supportCameras[n + N * k].transform.position - objPos));
+
+                debugPointSupportRelative.Add(supportRelativePosition[n + N * k]);
                 labelsSupport.Add(mapNameToNum[cloneObjs[k].name]);
                 debugPointsSupport.Add(supportCameras[n + N * k].transform.position);
             }
         }
+        UnityEngine.Debug.Log(numEpisodes);
+        numEpisodes += 1;
+        //UnityEngine.Debug.Break();
         this.RequestDecision();
     }
     IEnumerator waiter()
@@ -484,6 +552,20 @@ public class MetaLearningTask : Agent
         for (int i = 0; i < labelsTesting.Count; i++)
         {
             sensor.AddObservation(labelsTesting[i]);
+        }
+
+        // Support Camera Position, X, Y and Z
+        foreach (Vector3 pos in supportCameraPosRelativeToObj)
+        {
+            sensor.AddObservation(pos);
+
+        }
+
+        // Query Camera Position, X, Y and Z
+        foreach (Vector3 pos in queryCameraPosRelativeToObj)
+        {
+
+            sensor.AddObservation(pos);
         }
     }
 
