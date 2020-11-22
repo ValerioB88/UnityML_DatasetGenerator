@@ -210,7 +210,7 @@ public class MetaLearningTask : Agent
         {
             positions.Add(new Vector3(10 * k, 0, 0));
         }
-        Random.InitState(5); // DELETE
+        Random.InitState((int)System.DateTime.Now.Ticks); // DELETE
 
 
     }
@@ -378,30 +378,37 @@ public class MetaLearningTask : Agent
         // to values provided by the channels minDegreeSQcameras and maxDegreeSQcameras.
         // Finally scatter support cameras around the random pos. supp. cam. according to "scatterCameraDegree". 
 
-        float scatterCameraDegrees = 30; // In Degree 30 
-        float scatterCameraDirection = 30F;  // In Degree  30
-
         var envParameters = Academy.Instance.EnvironmentParameters;
         distance = envParameters.GetWithDefault("distance", 4.0f);
 
+
+        float scatterCameraDegrees = envParameters.GetWithDefault("scatterCameraDegrees", 30f); // 
+        float scatterCameraDirection = envParameters.GetWithDefault("scatterCameraDirection", 30f); // 300
+
+        // QUERY
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relatvie to the world)
-        float minDegreeQueryCamera = envParameters.GetWithDefault("minDegreeQueryCameras", 20f); // 
-        float maxDegreeQueryCamera = envParameters.GetWithDefault("maxDegreeQueryCameras", 130f); // 120
+        float minDegreeQueryCamera = envParameters.GetWithDefault("minDegreeQueryCameras", 0f); // 
+        float maxDegreeQueryCamera = envParameters.GetWithDefault("maxDegreeQueryCameras", 120f); // 120
 
+        float minDirectionQueryCamera = envParameters.GetWithDefault("minDirectionQueryCameras", -180f); // IN DEGREE -180, 180
+        float maxDirectionQueryCamera = envParameters.GetWithDefault("maxDirectionQueryCameras", 180f); //
+
+        // SUPPORT 
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relatvie to the world)
-        float minDegreeSupportCamera = envParameters.GetWithDefault("minDegreeSupportCamera", 20f);
-        float maxDegreeSupportCamera = envParameters.GetWithDefault("maxDegreeSupportCamera", 130f); //120
+        float minDegreeSupportCamera = envParameters.GetWithDefault("minDegreeSupportCamera", 0f);
+        float maxDegreeSupportCamera = envParameters.GetWithDefault("maxDegreeSupportCamera", 120f); //120
 
 
+
+        // DISTANCE
         // This goes from -180 to +180 (where 0 is the position of the query camera)
-        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -180F);
-        float maxDegreeSQcameras = envParameters.GetWithDefault("maxDegreeSQcameras", 180F);
+        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -180f);
+        float maxDegreeSQcameras = envParameters.GetWithDefault("maxDegreeSQcameras", 180f);
 
-        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcamera", -45); // IN DEGREE -180, 180
-        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcamera", 45f); //
+        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcameras", -180f); // IN DEGREE -180, 180
+        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcameras", 180f); //
 
-        float minDirectionCameraQuery = envParameters.GetWithDefault("minDirectionCameraQuery", -180f); // IN DEGREE -180, 180
-        float maxDirectionCameraQuery = envParameters.GetWithDefault("maxDirectionCameraQuery", 180f); //
+
 
         Assert.IsTrue(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeSupportCamera && maxDegreeQueryCamera + minDegreeSQcameras < maxDegreeSupportCamera);
         if (!(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeSupportCamera && maxDegreeQueryCamera + minDegreeSQcameras < maxDegreeSupportCamera))
@@ -455,7 +462,7 @@ public class MetaLearningTask : Agent
 
             var objPos = cloneObjs[k].transform.position;
             // Thi should be -0.5F, 0.5F or 0F, 1F
-            var directionCameraQuery = Random.Range(minDirectionCameraQuery, maxDirectionCameraQuery);
+            var directionCameraQuery = Random.Range(minDirectionQueryCamera, maxDirectionQueryCamera);
             var angleCameraQuery = RandomAngle(minDegreeQueryCamera, maxDegreeQueryCamera, minDegreeQueryCamera, maxDegreeQueryCamera);
             // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
             standardQueryCamera[k].transform.position = objPos + GetRandomAroundSphere(angleCameraQuery, directionCameraQuery, Vector3.up) * distance;
