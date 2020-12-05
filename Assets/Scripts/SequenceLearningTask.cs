@@ -415,12 +415,19 @@ public class SequenceLearningTask : Agent
         public float maxCenterPointAziTcameras = 360;
 
         // CANDIDATE 
-        public float minCenterPointInclCcameras =0; public float maxCenterPointInclCcameras = 120;
         // This is almost always 0-360
-        public float minCenterPointAziCcameras = 0; public float maxCenterPointAziCcameras = 360;
+        public float minCenterPointInclCcameras = 0; 
+        public float maxCenterPointInclCcameras = 120;
+
+        public float minCenterPointAziCcameras = 0; 
+        public float maxCenterPointAziCcameras = 360;
 
         // from 0 to 180 / 360, it's degree and direction of the area around the center point for training cameras.
-        public float areaInclTcameras = 10; public float areaAziTcameras = 180;
+        public float areaInclTcameras = 0; 
+        public float areaAziTcameras = 0;
+
+        public float areaInclCcameras = 90; 
+        public float areaAziCcameras = 0;
 
         // DISTANCE
         // This goes from -180 to +180 (where 0 is the position of the first training camera)
@@ -429,8 +436,7 @@ public class SequenceLearningTask : Agent
         public float minAziTCcameras = 0; public float maxAziTCcameras = 0;
 
         // THIS SHOULD BE POSITIVE! Distance across frames
-        public float minDegreeFrames = 14; public float maxDegreeFrames = 15;
-        public float areaInclCcameras = 10; public float areaAziCcameras = 180;
+        public float minDegreeFrames = 1; public float maxDegreeFrames = 2;
 
         public void UpdateParameters(EnvironmentParameters envParameters)
         {
@@ -527,7 +533,7 @@ public class SequenceLearningTask : Agent
         for (int k = 0; k < K; k++)
         {
             var objToLookAt = cloneObjs[k].transform.GetChild(0);
-            var objPos = cloneObjs[k].transform.position;
+            var objPos = cloneObjs[k].transform.position; // I should get the local to world: f(0, 0, 0) -> world position
             // Thi should be -0.5F, 0.5F or 0F, 1F
 
             // Set up the first camera position
@@ -535,6 +541,9 @@ public class SequenceLearningTask : Agent
             float azimuthCenterPointT = RandomAngle(simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
             float inclinationCenterPointT = RandomAngle(simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
             var middlePointTarea = GetPositionAroundSphere(inclinationCenterPointT, azimuthCenterPointT, Vector3.up) * simParams.distance;
+            float azimuthSequence = 0f;
+            float inclinationSequence = 0f;
+
 
             debugMiddlePointsTraining.Add(middlePointTarea);
             // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
@@ -542,11 +551,11 @@ public class SequenceLearningTask : Agent
             {
                 float delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
                 //UnityEngine.Debug.Log("DELTA: " + delta);
-                float azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-                float inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
+                azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
+                inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
 
                 middlePointSequence = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
-                debugPointsTraining.Add(middlePointSequence + cloneObjs[k].transform.position);
+                debugPointsTraining.Add(middlePointSequence + objPos);
                 var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f)));
                 if (st == 0 && k == 0)
                     debugRotation.Add(randomDirection);
@@ -577,24 +586,24 @@ public class SequenceLearningTask : Agent
             var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * simParams.distance;
             debugMiddlePointsCandidates.Add(middlePointCarea);
 
-
             for (int sc = 0; sc < numSc; sc++)
             {
                 float delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
                 UnityEngine.Debug.Log("DELTA: " + delta);
-                float azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-                float inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
-
-                middlePointSequence = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+                azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
+                inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
+                
+                var middlePointSequenceC  = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+                
                 var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1f, 1f)));
-                debugPointsCandidates.Add(middlePointSequence + objPos);
+                debugPointsCandidates.Add(middlePointSequenceC + objPos);
 
                 if (sc == 0 && k == 0)
                     debugRotation.Add(randomDirection);
 
                 for (int fsc = 0; fsc < numFc; fsc++)
                 {
-                    candidates[k].sequences[sc].frames[fsc].transform.position = objPos + Quaternion.AngleAxis(delta * (fsc - numFc / 2), randomDirection) * middlePointSequence;
+                    candidates[k].sequences[sc].frames[fsc].transform.position = objPos + Quaternion.AngleAxis(delta * (fsc - numFc / 2), randomDirection) * middlePointSequenceC;
                     candidates[k].sequences[sc].frames[fsc].transform.LookAt(objToLookAt, Vector3.up);
                     candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + k);
                     //debugPointsCandidates.Add(candidates[k].sequences[sc].frames[fsc].transform.position);
@@ -605,7 +614,31 @@ public class SequenceLearningTask : Agent
                 //  break;
             }
             //debugPointHistoryCenterRelativeCT[k].Add(objPos + (Quaternion.FromToRotation(middlePointTarea - objPos, (Vector3.forward * distance)) * middlePointCarea - objPos));
-            debugPointHistoryCenterRelativeCT[k].Add(objPos + (Quaternion.FromToRotation(middlePointSequence, (Vector3.forward * simParams.distance)) * middlePointTarea)); // we just take the middle point of the LAST sequences of candidates for this object
+            //var pos = middlePointSequenceC.transform.position;
+            //var rot = middlePointSequenceC.transform.rotation;
+            //var cloneMiddlePointAreaT = GameObject.Instantiate(middlePointTarea);
+            //var cloneMiddlePointSeqc = GameObject.Instantiate(middlePointSequenceC, cloneMiddlePointAreaT.transform);
+            //cloneMiddlePointSeqc.name = "IMPORTANT1";
+            //cloneMiddlePointSeqc.transform.position = pos;
+            //cloneMiddlePointSeqc.transform.rotation = rot;
+            var diffAzi = azimuthCenterPointT - azimuthSequence;
+            var diffIncl = inclinationCenterPointT - inclinationSequence;
+            var diffPos = simParams.distance * GetPositionAroundSphere(diffIncl + 90f, diffAzi - 90, Vector3.up);
+            //var rotObj = (Vector3.forward * simParams.distance)+ middlePointTarea.transform.worldToLocalMatrix.MultiplyPoint(middlePointSequenceC.transform.position);
+            //var cloneMiddlePoint = GameObject.Instantiate(middlePointSequenceC);
+            //cloneMiddlePoint.name = "IO";
+
+
+            // objPos + (Quaternion.FromToRotation(middlePointTarea.transform.position, (Vector3.forward * simParams.distance)) * middlePointSequenceC.transform.position);
+
+            //cloneMiddlePointAreaT.transform.LookAt(objToLookAt, Vector3.up);
+
+
+            //var diffAngle = Vector3.SignedAngle(cloneMiddlePoint.transform.up, Vector3.up, Vector3.forward);
+            //UnityEngine.Debug.Log("ANGLE: " + diffAngle);
+            //cloneMiddlePoint.transform.position = Quaternion.AngleAxis(diffAngle, Vector3.forward) * cloneMiddlePoint.transform.position;
+
+            debugPointHistoryCenterRelativeCT[k].Add(diffPos); // we just take the middle point of the LAST sequences of candidates for this object
         }
 
         numEpisodes += 1;

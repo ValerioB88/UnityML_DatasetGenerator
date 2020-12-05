@@ -382,8 +382,8 @@ public class MetaLearningTask : Agent
         distance = envParameters.GetWithDefault("distance", 4.0f);
 
 
-        float scatterCameraDegrees = envParameters.GetWithDefault("scatterCameraDegrees", 30f); // 
-        float scatterCameraDirection = envParameters.GetWithDefault("scatterCameraDirection", 30f); // 300
+        float scatterCameraDegrees = envParameters.GetWithDefault("scatterCameraDegrees", 1f); // 
+        float scatterCameraDirection = envParameters.GetWithDefault("scatterCameraDirection", 1f); // 300
 
         // QUERY
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relatvie to the world)
@@ -402,11 +402,11 @@ public class MetaLearningTask : Agent
 
         // DISTANCE
         // This goes from -180 to +180 (where 0 is the position of the query camera)
-        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -180f);
-        float maxDegreeSQcameras = envParameters.GetWithDefault("maxDegreeSQcameras", 180f);
+        float minDegreeSQcameras = envParameters.GetWithDefault("minDegreeSQcameras", -50f);
+        float maxDegreeSQcameras = envParameters.GetWithDefault("maxDegreeSQcameras", 50f);
 
-        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcameras", -180f); // IN DEGREE -180, 180
-        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcameras", 180f); //
+        float minDirectionSQcameras = envParameters.GetWithDefault("minDirectionSQcameras", -1f); // IN DEGREE -180, 180
+        float maxDirectionSQcameras = envParameters.GetWithDefault("maxDirectionSQcameras", 1f); //
 
 
 
