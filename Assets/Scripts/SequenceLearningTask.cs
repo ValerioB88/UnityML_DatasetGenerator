@@ -187,8 +187,9 @@ public class SequenceLearningTask : Agent
         numSc = int.Parse(tmp[2].Split(':')[1]);
         numFt = int.Parse(tmp[3].Split(':')[1]);
         numFc = int.Parse(tmp[4].Split(':')[1]);
-        sizeCanvas = int.Parse(tmp[3].Split(':')[1]);
+        sizeCanvas = int.Parse(tmp[5].Split(':')[1]);
 
+        sendDebugLogChannel.SendEnvInfoToPython("SLT From Unity Info: \nK: " + K.ToString() + " St: " + numSt.ToString() + " Sc: " + numSc.ToString() + " Ft: " + numFt.ToString() + " Fc: " + numFc.ToString() + " size_canvas: " + sizeCanvas.ToString());
         int totIndex = 0;
         string tmpName;
         for (int k = 0; k < K; k++)

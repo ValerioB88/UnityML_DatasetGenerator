@@ -12,14 +12,14 @@ using UnityEngine.UI;
 using UnityEditor.SceneManagement;
 #endif 
 
-class SequenceBuildSceneCLI : MonoBehaviour
+class SequenceBuildSceneCLI_test : MonoBehaviour
 {
 
-    public static int numSt = 1;
+    public static int numSt = 2;
     public static int numSc = 1;
-    public static int numFt = 4;
+    public static int numFt = 3;
     public static int numFc = 1;
-    public static int K = 2;
+    public static int K = 1;
     public static int Q = 1; // always 1
     public static int sizeCanvas = 64;
 
@@ -45,7 +45,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         }
 
         GameObject info = GameObject.Find("Info");
-        childs = info.transform.childCount;
+        //childs = info.transform.childCount;
         //for (int i = childs - 1; i >= 0; i--)
         //{
         //    DestroyImmediate(info.transform.GetChild(i).gameObject);
@@ -53,10 +53,9 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
         string infoTxt = "K:" + K.ToString() + "_St:" + numSt.ToString() + "_Sc:" + numSc.ToString() + "_Ft:" + numFt.ToString() + "_Fc:" + numFc.ToString() + "_SC:" + sizeCanvas.ToString() + "_d:" + nameDataset.ToString();
         UnityEngine.Debug.Log("BUILDING INFO TXT " + infoTxt);
-        info.transform.GetChild(0).name = infoTxt;
-
         //var infoObj = new GameObject(infoTxt);
         //infoObj.transform.parent = info.transform;
+        info.transform.GetChild(0).name = infoTxt;
         GameObject.Find("DebugText").GetComponent<Text>().text = infoTxt;
         List<CameraSensorComponent> camComp = new List<CameraSensorComponent>(agent.GetComponents<CameraSensorComponent>());
         foreach (CameraSensorComponent cam in camComp)
@@ -67,42 +66,39 @@ class SequenceBuildSceneCLI : MonoBehaviour
         //    UnityEngine.Debug.Log("CIAO");
 
         int totIndex = 0;
-        for (int k = 0; k < K; k++)
+      
+        GameObject candidateCamera = GameObject.Find("CandidateCamera"); // remember to take this out from the sensorlist
+        for (int sc = 0; sc < numSc; sc++)
         {
-            GameObject candidateCamera = GameObject.Find("CandidateCamera"); // remember to take this out from the sensorlist
-            for (int sc = 0; sc < numSc; sc++)
+            for (int fsc = 0; fsc < numFc; fsc++)
             {
-                for (int fsc = 0; fsc < numFc; fsc++)
-                {
-                    candidatesCameras.Add(Instantiate(candidateCamera));
-                    candidatesCameras[totIndex].transform.parent = cameraContainer.transform;
-                    candidatesCameras[totIndex].name = "C" + k + "S" + sc + "F" + fsc;
-                    candidatesCameras[totIndex].SetActive(false);
-                    totIndex += 1;
-                }
+                candidatesCameras.Add(Instantiate(candidateCamera));
+                candidatesCameras[totIndex].transform.parent = cameraContainer.transform;
+                candidatesCameras[totIndex].name = "C0" + "S" + sc + "F" + fsc;
+                candidatesCameras[totIndex].SetActive(false);
+                totIndex += 1;
             }
         }
-
+      
         totIndex = 0;
-        for (int k = 0; k < K; k++)
+      
+        GameObject queryCamera = GameObject.Find("QueryCamera"); // remember to take this out from the sensorlist
+        for (int st = 0; st < numSt; st++)
         {
-            GameObject queryCamera = GameObject.Find("QueryCamera"); // remember to take this out from the sensorlist
-            for (int st = 0; st < numSt; st++)
+            for (int fst = 0; fst < numFt; fst++)
             {
-                for (int fst = 0; fst < numFt; fst++)
-                {
-                    queriesCameras.Add(Instantiate(queryCamera));
-                    queriesCameras[totIndex].transform.parent = cameraContainer.transform;
-                    queriesCameras[totIndex].name = "Q" + k + "S" + st + "F" + fst;
-                    queriesCameras[totIndex].SetActive(false);
-                    totIndex += 1;
-                }
+                queriesCameras.Add(Instantiate(queryCamera));
+                queriesCameras[totIndex].transform.parent = cameraContainer.transform;
+                queriesCameras[totIndex].name = "Q0" + "S" + st + "F" + fst;
+                queriesCameras[totIndex].SetActive(false);
+                totIndex += 1;
             }
         }
+        
 
         //Add Cameras to Agent
-        Assert.IsTrue(candidatesCameras.Count == K * numFc * numSc);
-        Assert.IsTrue(queriesCameras.Count == K * numFt * numSt);
+        //Assert.IsTrue(candidatesCameras.Count == K * numFc * numSc);
+        //Assert.IsTrue(queriesCameras.Count == K * numFt * numSt);
 
 
         foreach (GameObject queryCam in queriesCameras)
@@ -124,15 +120,13 @@ class SequenceBuildSceneCLI : MonoBehaviour
             cmtmp.Height = sizeCanvas;
         }
 
-        // Includes labels, and N*K+K*Q vector3s
-        //UnityEngine.Debug.Log((N * K + K * Q) + 3 * (N * K + K * Q));
-        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = K + (numFt * numSt + numFc * numSc) * K * 3;
-
+        // Includes labels, and N*K+K*Q 
+        // Label objects + (Camera Candidate + (Camera Sequences))
+        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = 2 + (numFt * numSt + numFc * numSc) * 3;
 #if UNITY_EDITOR
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
         EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
 #endif
-
     }
 
     // Helper function for getting the command line arguments
@@ -158,7 +152,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         numFt = int.Parse(GetArg("-nFt"));
         numFc = int.Parse(GetArg("-nFc"));
 
-        K = int.Parse(GetArg("-k"));
+        K = int.Parse(GetArg("-k")); // This is NOT the total number of element, but the number of repetition of each task.
         sizeCanvas = int.Parse(GetArg("-size_canvas"));
         nameScene = GetArg("-name_scene");
         outputPath = GetArg("-output_path");
@@ -166,9 +160,8 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
 #if UNITY_EDITOR
         UnityEngine.Debug.Log("NAME SCENE: " + nameScene);
-        EditorSceneManager.OpenScene("Assets/Scenes/" + nameScene + ".unity", OpenSceneMode.Single );
+        EditorSceneManager.OpenScene("Assets/Scenes/" + nameScene + ".unity", OpenSceneMode.Single);
 #endif
-
         UpdateComponents();
 
 #if UNITY_EDITOR
