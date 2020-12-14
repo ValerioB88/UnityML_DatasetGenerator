@@ -24,8 +24,9 @@ public class SequenceLearningTask : Agent
 
 
     List<GameObject> datasetList = new List<GameObject>();
-    List<GameObject> selectedObjs = new List<GameObject>();
-    List<GameObject> cloneObjs = new List<GameObject>();
+    //List<GameObject> selectedObjs = new List<GameObject>();
+    List<GameObject> trainingObj = new List<GameObject>();
+    List<GameObject> candidateObjs = new List<GameObject>();
 
     [HideInInspector]
     public GameObject cameraContainer;
@@ -38,8 +39,8 @@ public class SequenceLearningTask : Agent
     List<int> labelsCandidates = new List<int>();
     List<int> labelsSelectedObjects = new List<int>();
 
-    List<Vector3> debugMiddlePointsTraining = new List<Vector3>();
-    List<Vector3> debugMiddlePointsCandidates = new List<Vector3>();
+    List<Vector3> debugMiddlePointsAreaT = new List<Vector3>();
+    List<Vector3> debugMiddlePointsAreaC = new List<Vector3>();
 
 
     [SerializeField]
@@ -75,15 +76,15 @@ public class SequenceLearningTask : Agent
     List<perceivableObject> training = new List<perceivableObject>();
 
     GameObject info;
-    List<Vector3> debugPointsCandidates = new List<Vector3>();
-    List<Vector3> debugPointsTraining = new List<Vector3>();
+    List<Vector3> debugMiddlePointsSequenceC = new List<Vector3>();
+    List<Vector3> debugMiddlePointsSequenceT = new List<Vector3>();
     List<List<Vector3>> debugPointHistoryCenterRelativeCT = new List<List<Vector3>>();
 
-    List<Vector3> debugRotation = new List<Vector3>();
+    //List<Vector3> debugRotation = new List<Vector3>();
 
-    List<Vector3> candidateCameraPosRelativeToObj = new List<Vector3>();
-    List<Vector3> trainingCameraPosRelativeToObj = new List<Vector3>();
-
+    //List<Vector3> candidateCameraPosRelativeToObj = new List<Vector3>();
+    //List<Vector3> trainingCameraPosRelativeToObj = new List<Vector3>();
+    List<Vector3> cameraPositions = new List<Vector3>();
     public int numEpisodes = 0;
     public SimulationParameters simParams = new SimulationParameters(); 
 
@@ -133,25 +134,27 @@ public class SequenceLearningTask : Agent
         if (dataset == null)
             Assert.IsTrue(false, "Dataset " + nameDataset + " not found.");
         int children = dataset.transform.childCount;
-        for (int i = children - 1; i >= 0; i--)
-        {
-            var obj = dataset.transform.GetChild(i);
-            GameObject pp = new GameObject("p_" + obj.name);
-            pp.transform.position = obj.transform.position;
-            pp.transform.rotation = obj.transform.rotation;
-            pp.transform.parent = dataset.transform;
-            obj.parent = pp.transform;
+        //for (int i = children - 1; i >= 0; i--)
+        //{
+        //    var obj = dataset.transform.GetChild(i);
+        //    GameObject pp = new GameObject("p_" + obj.name);
+        //    pp.transform.position = obj.transform.position;
+        //    pp.transform.rotation = obj.transform.rotation;
+        //    pp.transform.parent = dataset.transform;
+        //    obj.parent = pp.transform;
 
-        }
+        //}
         for (int i = 0; i < children; i++)
         {
             var obj = dataset.transform.GetChild(i);
 
             //UnityEngine.Debug.Log(dataset.transform.GetChild(i).gameObject.name);
             datasetList.Add(obj.gameObject);
+            datasetList[i].transform.position = new Vector3(10 * i, 0, 0);
             mapNameToNum.Add(datasetList[i].name, i);
+            SetLayerRecursively(datasetList[i], 8 + i);
         }
-        Assert.IsTrue(datasetList.Count >= K, "The elements in the datasetList are less than K!");
+        //Assert.IsTrue(datasetList.Count >= K, "The elements in the datasetList are less than K!");
     }
 
 
@@ -202,9 +205,10 @@ public class SequenceLearningTask : Agent
 
                 for (int fsq = 0; fsq < numFt; fsq++)
                 {
-                    tmpName = "Q" + k + "S" + sq + "F" + fsq;
+                    tmpName = "T" + k.ToString("D2") + "S" + sq + "F" + fsq;
                     training[k].sequences[sq].frames.Add(cameraContainer.transform.Find(tmpName).gameObject);
-                    trainingCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
+                    //trainingCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
+                    //cameraPositions.Add(new Vector3(0f, 0f, 0f));
 
                     totIndex += 1;
                 }
@@ -221,9 +225,11 @@ public class SequenceLearningTask : Agent
 
                 for (int fsc = 0; fsc < numFc; fsc++)
                 {
-                    tmpName = "C" + k + "S" + sc + "F" + fsc;
+                    tmpName = "C" + k.ToString("D2") + "S" + sc + "F" + fsc;
                     candidates[k].sequences[sc].frames.Add(cameraContainer.transform.Find(tmpName).gameObject);
-                    candidateCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
+                    //candidateCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
+                    //cameraPositions.Add(new Vector3(0f, 0f, 0f));
+
                     totIndex += 1;
                 }
             }
@@ -246,11 +252,11 @@ public class SequenceLearningTask : Agent
         FillDataset();
         sendEnvParamsChannel.SendEnvInfoToPython((datasetList.Count).ToString());
 
-        // Create Positions
-        for (int k = 0; k < K; k++)
-        {
-            positions.Add(new Vector3(10 * k, 0, 0));
-        }
+        //// Create Positions
+        //for (int k = 0; k < K; k++)
+        //{
+        //    positions.Add(new Vector3(10 * k, 0, 0));
+        //}
         //Random.InitState((int)System.DateTime.Now.Ticks); // DELETE
         Random.InitState(2);
 
@@ -292,23 +298,25 @@ public class SequenceLearningTask : Agent
             }
             Gizmos.color = new Vector4(1, 0F, 0F, 0.5F);
 
-            foreach (Vector3 vec in debugRotation)
-            {
-                Gizmos.DrawLine(cloneObjs[0].transform.position, (2 * simParams.distance * vec) + cloneObjs[0].transform.position);
-            }
+            //foreach (Vector3 vec in debugRotation)
+            //{
+            //    Gizmos.DrawLine(cloneObjs[0].transform.position, (2 * simParams.distance * vec) + cloneObjs[0].transform.position);
+            //}
 
             for (int k = 0; k < K; k++)
             {
                 Gizmos.color = new Vector4(153 / 255F, 51 / 255F, 1F, 0.2F);
-                Gizmos.DrawWireSphere(cloneObjs[k].transform.position, simParams.distance);
-                Gizmos.DrawSphere(cloneObjs[k].transform.position, simParams.distance);
+                Gizmos.DrawWireSphere(trainingObj[k].transform.position, simParams.distance);
+                Gizmos.DrawSphere(trainingObj[k].transform.position, simParams.distance);
+                Gizmos.DrawWireSphere(candidateObjs[k].transform.position, simParams.distance);
+                Gizmos.DrawSphere(candidateObjs[k].transform.position, simParams.distance);
             }
 
             if (gizmoCameraHistory)
             {
 
                 index = 0;
-                foreach (Vector3 vec in debugPointsCandidates)
+                foreach (Vector3 vec in debugMiddlePointsSequenceC)
                 {
 
                     Gizmos.color = new Vector4(0F, 1F, 0F, 0.5F);
@@ -318,7 +326,7 @@ public class SequenceLearningTask : Agent
                     index += 1;
                 }
                 index = 0;
-                foreach (Vector3 vec in debugPointsTraining)
+                foreach (Vector3 vec in debugMiddlePointsSequenceT)
                 {
 
                     Gizmos.color = new Vector4(0F, 0F, 1F, 0.5F);
@@ -335,10 +343,10 @@ public class SequenceLearningTask : Agent
                 for (int k = 0; k < K; k++)
                 {
                     Gizmos.color = new Vector4(0F, 1F, 0F, 0.5F);
-                    Gizmos.DrawSphere(debugMiddlePointsCandidates[0] + cloneObjs[k].transform.position, 0.2F);
+                    Gizmos.DrawSphere(debugMiddlePointsAreaC[k], 0.2F);
                     Gizmos.color = new Vector4(0F, 0F, 1F, 0.5F);
 
-                    Gizmos.DrawSphere(debugMiddlePointsTraining[0] + cloneObjs[k].transform.position, 0.3F);
+                    Gizmos.DrawSphere(debugMiddlePointsAreaT[k],  0.3F);
                 }
             }
             if (gizmoCamHistoryRelative)
@@ -349,13 +357,13 @@ public class SequenceLearningTask : Agent
                     {
                         Gizmos.color = new Vector4(1F, 0F, 0f, 1f);
                         Gizmos.DrawSphere(vec, 0.1F);
-                        Gizmos.DrawLine(cloneObjs[k].transform.position, Vector3.forward * simParams.distance + cloneObjs[k].transform.position);
+                        Gizmos.DrawLine(trainingObj[k].transform.position, Vector3.forward * simParams.distance + trainingObj[k].transform.position);
 
                         Gizmos.DrawWireSphere(vec, 0.1F);
 
                     }
                     Gizmos.color = new Vector4(1F, 1F, 0f, 1f);
-                    Gizmos.DrawLine(cloneObjs[k].transform.position, debugPointHistoryCenterRelativeCT[k][debugPointHistoryCenterRelativeCT[k].Count - 1]);
+                    Gizmos.DrawLine(trainingObj[k].transform.position, debugPointHistoryCenterRelativeCT[k][debugPointHistoryCenterRelativeCT[k].Count - 1]);
                 }
             }
             //index = 0;
@@ -408,7 +416,7 @@ public class SequenceLearningTask : Agent
         public float distance = 3.5f;
         // TRAINING
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relative to the world)
-        public float minCenterPointInclTcameras = 0; 
+        public float minCenterPointInclTcameras = 45; 
         public float maxCenterPointInclTcameras = 120;
 
         // This is almost always 0-360
@@ -417,18 +425,18 @@ public class SequenceLearningTask : Agent
 
         // CANDIDATE 
         // This is almost always 0-360
-        public float minCenterPointInclCcameras = 0; 
+        public float minCenterPointInclCcameras = 45; 
         public float maxCenterPointInclCcameras = 120;
 
         public float minCenterPointAziCcameras = 0; 
         public float maxCenterPointAziCcameras = 360;
 
         // from 0 to 180 / 360, it's degree and direction of the area around the center point for training cameras.
-        public float areaInclTcameras = 90;
-        public float areaAziTcameras = 180;
+        public float areaInclTcameras = 45;
+        public float areaAziTcameras = 45;
 
-        public float areaInclCcameras = 90; 
-        public float areaAziCcameras = 180;
+        public float areaInclCcameras = 45; 
+        public float areaAziCcameras = 45;
 
         // DISTANCE
         // This goes from -180 to +180 (where 0 is the position of the first training camera)
@@ -437,8 +445,8 @@ public class SequenceLearningTask : Agent
         public float minAziTCcameras = 0; public float maxAziTCcameras = 0;
 
         // THIS SHOULD BE POSITIVE! Distance across frames
-        public float minDegreeFrames = 10; public float maxDegreeFrames = 11;
-
+        public float minDegreeFrames = 14; public float maxDegreeFrames = 15;
+        public float probMatching = 0.9f;
         public void UpdateParameters(EnvironmentParameters envParameters)
         {
             distance = envParameters.GetWithDefault("distance", distance);
@@ -452,6 +460,7 @@ public class SequenceLearningTask : Agent
             areaAziCcameras = envParameters.GetWithDefault("areaAziCcameras", areaAziCcameras); //[0 360];
             minDegreeFrames = envParameters.GetWithDefault("minDegreeFrames", minDegreeFrames); // [0 inf]
             maxDegreeFrames = envParameters.GetWithDefault("maxDegreeFrames", maxDegreeFrames); // [0 inf]
+            probMatching = envParameters.GetWithDefault("probMatching", probMatching); // [0 inf]
         }
     }
 
@@ -472,7 +481,8 @@ public class SequenceLearningTask : Agent
             "\nareaAziTcameras: [" + simParams.areaAziTcameras + "]" +
             "\nDegreeFrames: [" + simParams.minDegreeFrames + "," + simParams.maxDegreeFrames + "]" +
             "\nareaInclCcameras: [" + simParams.areaInclCcameras + "]" +
-            "\nareaAziCcameras: [" + simParams.areaAziCcameras + "].");
+            "\nareaAziCcameras: [" + simParams.areaAziCcameras + "]" + 
+            "\nprobMatching: [" + simParams.probMatching + "].");
         }
 
 
@@ -485,157 +495,138 @@ public class SequenceLearningTask : Agent
         //}
 
 
-        selectedObjs.Clear();
-        cloneObjs.Clear();
-        debugRotation.Clear();
+        trainingObj.Clear();
+        candidateObjs.Clear();
+        cameraPositions.Clear();
+        labelsSelectedObjects.Clear();
+
+        //debugRotation.Clear();
 
         if (numEpisodes % 300 == 0)
         {
-            debugPointsTraining.Clear();
-            debugPointsCandidates.Clear();
+            debugMiddlePointsSequenceT.Clear();
+            debugMiddlePointsSequenceC.Clear();
             for (int k = 0; k < K; k++)
             {
                 debugPointHistoryCenterRelativeCT[k].Clear();
             }
         }
 
-        debugMiddlePointsCandidates.Clear();
-        debugMiddlePointsTraining.Clear();
-        GameObject episodeContainer = new GameObject("Episode Container");
-        // Draw K classes from the list
-        List<int> listNumbers = new List<int>();
-        int number;
-        for (int k = 0; k < K; k++)
-        {
-            do
-            {
-                number = Random.Range(0, datasetList.Count);
-            } while (listNumbers.Contains(number));
-            listNumbers.Add(number);
-            selectedObjs.Add(datasetList[number]);
-        };
+        debugMiddlePointsAreaC.Clear();
+        debugMiddlePointsAreaT.Clear();
 
-        // Place the selected objects on their position
-        for (int k = 0; k < K; k++)
-        {
-            cloneObjs.Add(Instantiate(selectedObjs[k], positions[k], Quaternion.identity));
-            cloneObjs[k].transform.parent = episodeContainer.transform;
-            cloneObjs[k].name = selectedObjs[k].name;
-            // Unity generates 32 layers. Layers from 8 and above are unused.
-            SetLayerRecursively(cloneObjs[k], 8 + k);
-            labelsSelectedObjects.Add(mapNameToNum[cloneObjs[k].name]);
-            // Move the object inside, down
-        }
-
-
-
-        float azimuthCenterPointT = RandomAngle(simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-        float inclinationCenterPointT = RandomAngle(simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
-        var middlePointTarea = GetPositionAroundSphere(inclinationCenterPointT, azimuthCenterPointT, Vector3.up) * simParams.distance;
-        float azimuthSequence = 0f;
-        float inclinationSequence = 0f;
-        debugMiddlePointsTraining.Add(middlePointTarea);
-
-        float azimuthCenterPointC = RandomAngle(azimuthCenterPointT + simParams.minAziTCcameras,
-                                           azimuthCenterPointT + simParams.maxAziTCcameras,
-                                           simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-        float inclinationCenterPointC = RandomAngle(inclinationCenterPointT + simParams.minInclTCcameras,
-                                                    inclinationCenterPointT + simParams.maxInclTCcameras,
-                                                    simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
-
-        var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * simParams.distance;
-        debugMiddlePointsCandidates.Add(middlePointCarea);
-        // Get Camera Positions
-
-        List<Vector3> middlePointSequenceT = new List<Vector3>();
-        List<Vector3> randomDirectionT = new List<Vector3>();
-        float delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
-
-        for (int st = 0; st < numSt; st++)
-        {
-            //UnityEngine.Debug.Log("DELTA: " + delta);
-            azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-            inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
-            middlePointSequenceT.Add(GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance);
-            randomDirectionT.Add(Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f))));
-
-        }
-
-
-        List<Vector3> middlePointSequenceC = new List<Vector3>();
-        List<Vector3> randomDirectionC = new List<Vector3>();
-
-        for (int sc = 0; sc < numSc; sc++)
-        {
-            azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-            inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
-
-            middlePointSequenceC.Add(GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance);
-            randomDirectionC.Add(Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1f, 1f))));
-        }
-
+        Vector3 middlePointSequenceT;
+        Vector3 middlePointSequenceC;
+        
         int indexTraining = 0;
         int indexCandidate = 0;
+
         for (int k = 0; k < K; k++)
         {
-            var objToLookAt = cloneObjs[k].transform.GetChild(0);
-            var objPos = cloneObjs[k].transform.position; // I should get the local to world: f(0, 0, 0) -> world position
-            
-            // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
-            for (int st = 0; st < numSt; st++)
+            // Place the selected objects on their position
+            var trainingObjIdx = Random.Range(0, datasetList.Count);
+            int candidateObjIdx = trainingObjIdx;
+            if (Random.Range(0f, 1f) > simParams.probMatching)
             {
-                //float delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
-                ////UnityEngine.Debug.Log("DELTA: " + delta);
-                //azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-                //inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
-
-                //middlePointSequence = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
-                debugPointsTraining.Add(middlePointSequenceT[st] + objPos);
-
-                //var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f)));
-                //if (st == 0 && k == 0)
-                debugRotation.Add(randomDirectionT[st]);
-
-                // 
-                for (int fst = 0; fst < numFt; fst++)
+                do
                 {
-                    training[k].sequences[st].frames[fst].transform.position = objPos + Quaternion.AngleAxis(delta * (fst - numFt / 2), randomDirectionT[st]) * middlePointSequenceT[st];
-                    training[k].sequences[st].frames[fst].transform.LookAt(objToLookAt);
-                    training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + k);
-                    //debugPointsTraining.Add(training[k].sequences[st].frames[indexFrames].transform.position);
-                    trainingCameraPosRelativeToObj[indexTraining] = training[k].sequences[st].frames[fst].transform.position - objPos;
-                    indexTraining += 1;
-
-                }
-                // break;
+                    candidateObjIdx = Random.Range(0, datasetList.Count);
+                } while (candidateObjIdx == trainingObjIdx);
             }
+
+            //labelsSelectedObjects.Add(mapNameToNum[cloneObjs[k].name]);
+            labelsSelectedObjects.Add(candidateObjIdx);
+            labelsSelectedObjects.Add(trainingObjIdx);
+
+            trainingObj.Add(datasetList[trainingObjIdx]);
+            candidateObjs.Add(datasetList[candidateObjIdx]);
+
+            // MIDDLE POINTS FOR TRAINING
+            var objPosT = datasetList[trainingObjIdx].transform.position; // I should get the local to world: f(0, 0, 0) -> world position
+            var objToLookAtT = datasetList[trainingObjIdx].transform; //.transform.GetChild(0);
+
+            float azimuthCenterPointT = RandomAngle(simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
+            float inclinationCenterPointT = RandomAngle(simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
+            var middlePointTarea = GetPositionAroundSphere(inclinationCenterPointT, azimuthCenterPointT, Vector3.up) * simParams.distance;
+            debugMiddlePointsAreaT.Add(middlePointTarea + objPosT);
+
+            float azimuthSequence = 0f;
+            float inclinationSequence = 0f;
+            var delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
+
+           
+            // MIDDLE POINTS FOR CANDIDATES 
+            var objPosC = datasetList[candidateObjIdx].transform.position; // I should get the local to world: f(0, 0, 0) -> world position
+            var objToLookAtC = datasetList[candidateObjIdx].transform; //.transform.GetChild(0);
+
+
+            float azimuthCenterPointC = RandomAngle(azimuthCenterPointT + simParams.minAziTCcameras,
+                                               azimuthCenterPointT + simParams.maxAziTCcameras,
+                                               simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
+            float inclinationCenterPointC = RandomAngle(inclinationCenterPointT + simParams.minInclTCcameras,
+                                                        inclinationCenterPointT + simParams.maxInclTCcameras,
+                                                        simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
+
+            var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * simParams.distance;
+            debugMiddlePointsAreaC.Add(middlePointCarea + objPosC);
 
             for (int sc = 0; sc < numSc; sc++)
             {
-                //azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-                //inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
+                azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
+                inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
 
-                //var middlePointSequenceC  = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+                middlePointSequenceC = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
 
-                //var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1f, 1f)));
-                //debugPointsCandidates.Add(middlePointSequenceC + objPos);
-                debugPointsCandidates.Add(middlePointSequenceC[sc] + objPos);
+                var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1f, 1f)));
+                //debugPointsCandidates.Add(middlePointSequenceC + objPosC);
+                debugMiddlePointsSequenceC.Add(middlePointSequenceC + objPosC);
 
                 //if (sc == 0 && k == 0)
                 //    debugRotation.Add(randomDirection);
 
                 for (int fsc = 0; fsc < numFc; fsc++)
                 {
-                    candidates[k].sequences[sc].frames[fsc].transform.position = objPos + Quaternion.AngleAxis(delta * (fsc - numFc / 2), randomDirectionC[sc]) * middlePointSequenceC[sc];
-                    candidates[k].sequences[sc].frames[fsc].transform.LookAt(objToLookAt, Vector3.up);
-                    candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + k);
+                    candidates[k].sequences[sc].frames[fsc].transform.position = objPosC + Quaternion.AngleAxis(delta * (fsc - numFc / 2), randomDirection) * middlePointSequenceC;
+                    candidates[k].sequences[sc].frames[fsc].transform.LookAt(objToLookAtC, Vector3.up);
+                    candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
                     //debugPointsCandidates.Add(candidates[k].sequences[sc].frames[fsc].transform.position);
-                    candidateCameraPosRelativeToObj[indexCandidate] = candidates[k].sequences[sc].frames[fsc].transform.position - objPos;
+                    //candidateCameraPosRelativeToObj[indexCandidate] = candidates[k].sequences[sc].frames[fsc].transform.position - objPos;
+                    cameraPositions.Add(candidates[k].sequences[sc].frames[fsc].transform.position - objPosC);
+
                     indexCandidate += 1;
                 }
-
-                //  break;
             }
+
+
+                // This should be 0F, 180F, 0F, 1F but change it to 0F, 0F for testing. 
+            for (int st = 0; st < numSt; st++)
+            {
+                //UnityEngine.Debug.Log("DELTA: " + delta);
+                azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
+                inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
+
+                middlePointSequenceT = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+                debugMiddlePointsSequenceT.Add(middlePointSequenceT + objPosT);
+
+                var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f)));
+                //if (st == 0 && k == 0)
+                //debugRotation.Add(randomDirectionT[st]);
+
+                // 
+                for (int fst = 0; fst < numFt; fst++)
+                {
+                    training[k].sequences[st].frames[fst].transform.position = objPosT + Quaternion.AngleAxis(delta * (fst - numFt / 2), randomDirection) * middlePointSequenceT;
+                    training[k].sequences[st].frames[fst].transform.LookAt(objToLookAtT);
+                    training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
+                    //debugPointsTraining.Add(training[k].sequences[st].frames[indexFrames].transform.position);
+                    //trainingCameraPosRelativeToObj[indexTraining] = training[k].sequences[st].frames[fst].transform.position - objPos;
+                    cameraPositions.Add(training[k].sequences[st].frames[fst].transform.position - objPosT);
+                    //indexTraining += 1;
+                }
+                // break;
+            }
+            //  break;
+        
             //debugPointHistoryCenterRelativeCT[k].Add(objPos + (Quaternion.FromToRotation(middlePointTarea - objPos, (Vector3.forward * distance)) * middlePointCarea - objPos));
             //var pos = middlePointSequenceC.transform.position;
             //var rot = middlePointSequenceC.transform.rotation;
@@ -661,7 +652,7 @@ public class SequenceLearningTask : Agent
             //UnityEngine.Debug.Log("ANGLE: " + diffAngle);
             //cloneMiddlePoint.transform.position = Quaternion.AngleAxis(diffAngle, Vector3.forward) * cloneMiddlePoint.transform.position;
 
-            debugPointHistoryCenterRelativeCT[k].Add(diffPos + objPos); // we just take the middle point of the LAST sequences of candidates for this object
+            debugPointHistoryCenterRelativeCT[k].Add(diffPos + objPosT); // we just take the middle point of the LAST sequences of candidates for this object
         }
 
         numEpisodes += 1;
@@ -680,14 +671,14 @@ public class SequenceLearningTask : Agent
         if (Input.GetKeyDown("space"))
         {
             UnityEngine.Debug.Log("SPACE");
-            foreach (GameObject cln in cloneObjs)
-            {
-                Destroy(cln);
-            }
-            labelsCandidates.Clear();
+            //foreach (GameObject cln in trainingObj)
+            //{
+            //    Destroy(cln);
+            //}
+            //labelsCandidates.Clear();
             labelsSelectedObjects.Clear();
             GameObject episodeContainer = GameObject.Find("Episode Container");
-            Destroy(episodeContainer);
+            //Destroy(episodeContainer);
             OnEpisodeBegin();
 
         }
@@ -706,6 +697,8 @@ public class SequenceLearningTask : Agent
 
         for (int i = 0; i < labelsSelectedObjects.Count; i++)
         {
+            //UnityEngine.Debug.Log(labelsSelectedObjects[i] + " Name: " + datasetList[labelsSelectedObjects[i]]);
+            //sendDebugLogChannel.SendEnvInfoToPython("LABEL " + i + ": " + labelsSelectedObjects[i]);
             sensor.AddObservation(labelsSelectedObjects[i]);
         }
 
@@ -715,31 +708,24 @@ public class SequenceLearningTask : Agent
         //}
 
         //Support Camera Position, X, Y and Z
-        foreach (Vector3 pos in candidateCameraPosRelativeToObj)
+        foreach (Vector3 pos in cameraPositions)
         {
             sensor.AddObservation(pos);
 
         }
 
-        // Training Camera Position, X, Y and Z
-        foreach (Vector3 pos in trainingCameraPosRelativeToObj)
-        {
-
-            sensor.AddObservation(pos);
-        }
     }
 
 
     public override void OnActionReceived(float[] vectorAction)
     {
-        foreach (GameObject cln in cloneObjs)
-        {
-            Destroy(cln);
-        }
-        labelsCandidates.Clear();
-        labelsSelectedObjects.Clear();
-        GameObject episodeContainer = GameObject.Find("Episode Container");
-        Destroy(episodeContainer);
+        //foreach (GameObject cln in trainingObj)
+        //{
+        //    Destroy(cln);
+        //}
+        //labelsCandidates.Clear();
+        //GameObject episodeContainer = GameObject.Find("Episode Container");
+        //Destroy(episodeContainer);
         OnEpisodeBegin();
     }
 
@@ -805,7 +791,7 @@ public class SequenceMLtaskEditor : Editor
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("K"), GUILayout.Width(20));
-            int currentK = EditorGUILayout.IntSlider(K, 1, 10);
+            int currentK = EditorGUILayout.IntSlider(K, 1, 30);
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();

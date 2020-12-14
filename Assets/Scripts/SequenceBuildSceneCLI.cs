@@ -28,13 +28,13 @@ class SequenceBuildSceneCLI : MonoBehaviour
     public static string outputPath = "";
 
     public static List<GameObject> candidatesCameras = new List<GameObject>();
-    public static List<GameObject> queriesCameras = new List<GameObject>();
+    public static List<GameObject> trainingCameras = new List<GameObject>();
 
     public static string buildOs;
 
     static public void UpdateComponents()
     {
-        queriesCameras.Clear();
+        trainingCameras.Clear();
         candidatesCameras.Clear();
         GameObject cameraContainer = GameObject.Find("CameraContainer");
         GameObject agent = GameObject.Find("Agent");
@@ -66,7 +66,9 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
         //    UnityEngine.Debug.Log("CIAO");
 
-        int totIndex = 0;
+        int totIndexT = 0;
+        int totIndexC = 0;
+
         for (int k = 0; k < K; k++)
         {
             GameObject candidateCamera = GameObject.Find("CandidateCamera"); // remember to take this out from the sensorlist
@@ -75,41 +77,41 @@ class SequenceBuildSceneCLI : MonoBehaviour
                 for (int fsc = 0; fsc < numFc; fsc++)
                 {
                     candidatesCameras.Add(Instantiate(candidateCamera));
-                    candidatesCameras[totIndex].transform.parent = cameraContainer.transform;
-                    candidatesCameras[totIndex].name = "C" + k + "S" + sc + "F" + fsc;
-                    candidatesCameras[totIndex].SetActive(false);
-                    totIndex += 1;
+                    candidatesCameras[totIndexC].transform.parent = cameraContainer.transform;
+                    candidatesCameras[totIndexC].name = "C" + k.ToString("D2") + "S" + sc + "F" + fsc;
+                    candidatesCameras[totIndexC].SetActive(false);
+                    totIndexC += 1;
                 }
             }
+           
         }
 
-        totIndex = 0;
         for (int k = 0; k < K; k++)
         {
-            GameObject queryCamera = GameObject.Find("QueryCamera"); // remember to take this out from the sensorlist
+            GameObject trainingCamera = GameObject.Find("TrainingCamera"); // remember to take this out from the sensorlist
             for (int st = 0; st < numSt; st++)
             {
                 for (int fst = 0; fst < numFt; fst++)
                 {
-                    queriesCameras.Add(Instantiate(queryCamera));
-                    queriesCameras[totIndex].transform.parent = cameraContainer.transform;
-                    queriesCameras[totIndex].name = "Q" + k + "S" + st + "F" + fst;
-                    queriesCameras[totIndex].SetActive(false);
-                    totIndex += 1;
+                    trainingCameras.Add(Instantiate(trainingCamera));
+                    trainingCameras[totIndexT].transform.parent = cameraContainer.transform;
+                    trainingCameras[totIndexT].name = "T" + k.ToString("D2") + "S" + st + "F" + fst;
+                    trainingCameras[totIndexT].SetActive(false);
+                    totIndexT += 1;
                 }
             }
         }
 
         //Add Cameras to Agent
         Assert.IsTrue(candidatesCameras.Count == K * numFc * numSc);
-        Assert.IsTrue(queriesCameras.Count == K * numFt * numSt);
+        Assert.IsTrue(trainingCameras.Count == K * numFt * numSt);
 
 
-        foreach (GameObject queryCam in queriesCameras)
+        foreach (GameObject traingCam in trainingCameras)
         {
             CameraSensorComponent cmtmp = agent.AddComponent<CameraSensorComponent>();
-            cmtmp.Camera = queryCam.GetComponent<Camera>();
-            cmtmp.SensorName = queryCam.name;
+            cmtmp.Camera = traingCam.GetComponent<Camera>();
+            cmtmp.SensorName = traingCam.name;
             cmtmp.Width = sizeCanvas;
             cmtmp.Height = sizeCanvas;
 
@@ -126,7 +128,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
         // Includes labels, and N*K+K*Q vector3s
         //UnityEngine.Debug.Log((N * K + K * Q) + 3 * (N * K + K * Q));
-        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = K + (numFt * numSt + numFc * numSc) * K * 3;
+        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = (K * 2) + (numFt * numSt + numFc * numSc) * K * 3;
 
 #if UNITY_EDITOR
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
