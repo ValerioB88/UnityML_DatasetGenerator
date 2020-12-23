@@ -117,27 +117,40 @@ public class SequenceLearningTask : Agent
     public enum TaskType
     {
         TRAIN,
-        TEST_INTERPOLATE,
-        TEST_EXTRAPOLATE,
+        TEST_SAME_AXIS,
         TEST_ORTHOGONAL
     }
 
     void FillDataset()
     {
 
-        GameObject dataset = GameObject.Find(nameDataset);
-        if (dataset == null)
-            Assert.IsTrue(false, "Dataset " + nameDataset + " not found.");
-        int children = dataset.transform.childCount;
+        //GameObject datasetsStr = GameObject.Find(nameDataset);
+        GameObject datasetObj = new GameObject("ActiveDataset");
+        //GameObject separator = GameObject.Find("Separator");
 
-        for (int i = 0; i < children; i++)
+        int totChildren = 0;
+        var datasetListStr = nameDataset.Split('+');
+        foreach (var datasetStr in datasetListStr)
         {
-            var obj = dataset.transform.GetChild(i);
+            var thisDataset = GameObject.Find(datasetStr);
+            if (thisDataset == null)
+                Assert.IsTrue(false, "Dataset " + nameDataset + " not found.");
+            int children = thisDataset.transform.childCount;
 
-            datasetList.Add(obj.gameObject);
-            datasetList[i].transform.position = new Vector3(10 * i, 0, 0);
-            //mapNameToNum.Add(datasetList[i].name, i);
-            SetLayerRecursively(datasetList[i], 8 + i);
+            for (int i = 0; i < children; i++)
+            {
+                var obj = thisDataset.transform.GetChild(i);
+                var newObj = GameObject.Instantiate(obj);
+                newObj.transform.position = new Vector3(0f, 0f, 0f);
+                newObj.transform.parent = datasetObj.transform;
+                datasetList.Add(newObj.gameObject);
+                datasetList[datasetList.Count-1].transform.position = new Vector3(10 * totChildren, 0, 0);
+                totChildren += 1;
+                //mapNameToNum.Add(datasetList[i].name, i);
+                //SetLayerRecursively(datasetList[i], 8 + i);
+                //var newSeparator = GameObject.Instantiate(separator);
+                //newSeparator.transform.position = new Vector3(10 * i + 5, 0, 0);
+            }
         }
         //Assert.IsTrue(datasetList.Count >= K, "The elements in the datasetList are less than K!");
     }
@@ -376,15 +389,15 @@ public class SequenceLearningTask : Agent
     }
 #endif
 
-    protected Vector3 GetPositionAroundSphere(float angle, float direction, Vector3 aroundPosition)
+    protected Vector3 GetPositionAroundSphere(float inclinationDeg, float azimuthDeg, Vector3 aroundPosition)
     {
 
         // direction in DEGREES
 
-        float azimuth = direction * Mathf.Deg2Rad; // * 2.0F * UnityEngine.Mathf.PI;
-        float cosDistFromZenith = Mathf.Cos(angle * Mathf.Deg2Rad); //Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
+        float azimuthRad = azimuthDeg * Mathf.Deg2Rad; // * 2.0F * UnityEngine.Mathf.PI;
+        float cosDistFromZenith = Mathf.Cos(inclinationDeg * Mathf.Deg2Rad); //Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
         float sinDistFromZenith = Mathf.Sqrt(1.0F - cosDistFromZenith * cosDistFromZenith);
-        Vector3 pqr = new Vector3(Mathf.Cos(azimuth) * sinDistFromZenith, UnityEngine.Mathf.Sin(azimuth) * sinDistFromZenith, cosDistFromZenith);
+        Vector3 pqr = new Vector3(Mathf.Cos(azimuthRad) * sinDistFromZenith, UnityEngine.Mathf.Sin(azimuthRad) * sinDistFromZenith, cosDistFromZenith);
         Vector3 rAxis = aroundPosition; // Vector3.up when around zenith
         Vector3 pAxis = Mathf.Abs(rAxis[0]) < 0.9 ? new Vector3(1F, 0F, 0F) : new Vector3(0F, 1F, 0F);
         Vector3 qAxis = Vector3.Normalize(Vector3.Cross(rAxis, pAxis));
@@ -409,7 +422,7 @@ public class SequenceLearningTask : Agent
 
     public class SimulationParameters
     {
-        public float distance = 3.5f;
+        public float distance = 4f;
         // TRAINING
         // THIS GOES FROM 0 to 180 (cover the whole sphere) (relative to the world)
         public float minCenterPointInclTcameras = 45; 
@@ -428,11 +441,11 @@ public class SequenceLearningTask : Agent
         public float maxCenterPointAziCcameras = 360;
 
         // from 0 to 180 / 360, it's degree and direction of the area around the center point for training cameras.
-        public float areaInclTcameras = 45;
-        public float areaAziTcameras = 45;
+        public float areaInclTcameras = 120;
+        public float areaAziTcameras = 359;
 
-        public float areaInclCcameras = 45; 
-        public float areaAziCcameras = 45;
+        public float areaInclCcameras = 120; 
+        public float areaAziCcameras = 359;
 
         // DISTANCE
         // This goes from -180 to +180 (where 0 is the position of the first training camera)
@@ -442,7 +455,7 @@ public class SequenceLearningTask : Agent
 
         // THIS SHOULD BE POSITIVE! Distance across frames
         public float minDegreeFrames = 14; public float maxDegreeFrames = 15;
-        public float probMatching = 0.9f;
+        public float probMatching = 1f;
         public void UpdateParameters(EnvironmentParameters envParameters)
         {
             distance = envParameters.GetWithDefault("distance", distance);
@@ -546,7 +559,7 @@ public class SequenceLearningTask : Agent
             {
                 candidates[k].sequences[sc].frames[fsc].transform.position = objPosC + Quaternion.AngleAxis(delta * (fsc - numFc / 2), randomDirection) * middlePointSequenceC;
                 candidates[k].sequences[sc].frames[fsc].transform.LookAt(objToLookAtC, Vector3.up);
-                candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
+                //candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
                 cameraPositions.Add(candidates[k].sequences[sc].frames[fsc].transform.position - objPosC);
             }
         }
@@ -566,7 +579,7 @@ public class SequenceLearningTask : Agent
             {
                 training[k].sequences[st].frames[fst].transform.position = objPosT + Quaternion.AngleAxis(delta * (fst - numFt / 2), randomDirection) * middlePointSequenceT;
                 training[k].sequences[st].frames[fst].transform.LookAt(objToLookAtT);
-                training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
+                //training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
                 cameraPositions.Add(training[k].sequences[st].frames[fst].transform.position - objPosT);
             }
         }
@@ -577,10 +590,10 @@ public class SequenceLearningTask : Agent
         gizmoPointHistoryCenterRelativeCT[k].Add(diffPos + objPosT);
     }
 
-    public void SetCameraPositionsInterp(int k, int trainingObjIdx, int candidateObjIdx)
+    public void SetCamearPositionTest(int k, int trainingObjIdx, int candidateObjIdx)
     {
-        int degree = (int)envParams.GetWithDefault("degree", 45f);
-        int rotation = (int)envParams.GetWithDefault("rotation", 45f);
+        int degree = (int)envParams.GetWithDefault("degree", (numEpisodes-1)* 10);
+        int rotation = (int)envParams.GetWithDefault("rotation", (numEpisodes-1) * 10);
         
         var objPosT = datasetList[trainingObjIdx].transform.position;
         var objToLookAtT = datasetList[trainingObjIdx].transform;
@@ -592,11 +605,28 @@ public class SequenceLearningTask : Agent
 
         int sc = 0;
         int fsc = 0;
-        var degreesC = GetPositionAroundSphere(90, rotation + degree, Vector3.up) * simParams.distance;
+        Vector3 positionObj = new Vector3(0f, 0f, 0f);
+        if (taskType == TaskType.TEST_SAME_AXIS)
+        {
+            positionObj = GetPositionAroundSphere(90, rotation + degree, Vector3.up) * simParams.distance;
 
-        candidates[k].sequences[sc].frames[fsc].transform.position = objPosC + Quaternion.AngleAxis(0, Vector3.up) * degreesC;
+        }
+        if (taskType == TaskType.TEST_ORTHOGONAL)
+        {
+            int rotation_ortho = rotation; 
+            if (degree > 90 && degree < 270)
+            {
+                rotation_ortho += 180;
+            }
+            UnityEngine.Debug.Log("D: " + (90 + degree).ToString() + "R: " + rotation);
+            positionObj = GetPositionAroundSphere(90 + degree, rotation_ortho, Vector3.up) * simParams.distance;
+
+        }
+
+
+        candidates[k].sequences[sc].frames[fsc].transform.position = objPosC + positionObj;
         candidates[k].sequences[sc].frames[fsc].transform.LookAt(objToLookAtC, Vector3.up);
-        candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
+        //candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
         cameraPositions.Add(candidates[k].sequences[sc].frames[fsc].transform.position - objPosC);
 
         for (int st = 0; st < numSt; st++)
@@ -604,9 +634,9 @@ public class SequenceLearningTask : Agent
             if (st == 0)
             {
                 positionsTcameras.Clear();
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 15, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 45, Vector3.up) * simParams.distance);
                 positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 0, Vector3.up) * simParams.distance);
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 15, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 15, Vector3.up) * simParams.distance);
 
             }
             if (st == 1)
@@ -622,18 +652,17 @@ public class SequenceLearningTask : Agent
             {
                 training[k].sequences[st].frames[fst].transform.position = objPosT + positionsTcameras[fst];
                 training[k].sequences[st].frames[fst].transform.LookAt(objToLookAtT);
-                training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
+                //training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
                 //debugPointsTraining.Add(training[k].sequences[st].frames[fst].transform.position);
                 //trainingCameraPosRelativeToObj[indexTraining] = positionsTcameras[fst];
                 //indexTraining += 1;
                 cameraPositions.Add(training[k].sequences[st].frames[fst].transform.position - objPosT);
 
             }
-        }
-
-       
+        }       
     }
 
+   
     public (int t, int c) GetObjIdxFromChannel()
     {
         int trainingObjIdx = (int)envParams.GetWithDefault("objT", 0f);
@@ -659,7 +688,8 @@ public class SequenceLearningTask : Agent
             "\nDegreeFrames: [" + simParams.minDegreeFrames + "," + simParams.maxDegreeFrames + "]" +
             "\nareaInclCcameras: [" + simParams.areaInclCcameras + "]" +
             "\nareaAziCcameras: [" + simParams.areaAziCcameras + "]" + 
-            "\nprobMatching: [" + simParams.probMatching + "].");
+            "\nprobMatching: [" + simParams.probMatching + "]" +
+            "\n<< UNITY.");
         }
 
 
@@ -692,17 +722,13 @@ public class SequenceLearningTask : Agent
 
             gizmoTrainingObj.Add(datasetList[trainingObjIdx]);
             gizmoCandidateObjs.Add(datasetList[candidateObjIdx]);
-            switch (taskType)
+            if (taskType == TaskType.TRAIN)
             {
-                case TaskType.TRAIN:
-                    SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
-                    break;
-                case TaskType.TEST_INTERPOLATE:
-                    SetCameraPositionsInterp(k, trainingObjIdx, candidateObjIdx);
-                    break;
-                default:
-                    Assert.IsTrue(false); 
-                    break;
+                SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
+            }
+            else
+            {
+                SetCamearPositionTest(k, trainingObjIdx, candidateObjIdx);
             }
         }
 
