@@ -144,7 +144,7 @@ public class SequenceLearningTask : Agent
                 newObj.transform.position = new Vector3(0f, 0f, 0f);
                 newObj.transform.parent = datasetObj.transform;
                 datasetList.Add(newObj.gameObject);
-                datasetList[datasetList.Count-1].transform.position = new Vector3(10 * totChildren, 0, 0);
+                datasetList[datasetList.Count-1].transform.position = new Vector3(15 * totChildren, 0, 0);
                 totChildren += 1;
                 //mapNameToNum.Add(datasetList[i].name, i);
                 //SetLayerRecursively(datasetList[i], 8 + i);
@@ -634,7 +634,7 @@ public class SequenceLearningTask : Agent
             if (st == 0)
             {
                 positionsTcameras.Clear();
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 45, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 15, Vector3.up) * simParams.distance);
                 positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 0, Vector3.up) * simParams.distance);
                 positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 15, Vector3.up) * simParams.distance);
 
