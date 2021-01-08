@@ -19,6 +19,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
     public static int numSc = 1;
     public static int numFt = 4;
     public static int numFc = 1;
+    public static int grayscale = 1;
     public static int K = 2;
     public static int Q = 1; // always 1
     public static int sizeCanvas = 64;
@@ -51,7 +52,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         //    DestroyImmediate(info.transform.GetChild(i).gameObject);
         //}
 
-        string infoTxt = "K:" + K.ToString() + "_St:" + numSt.ToString() + "_Sc:" + numSc.ToString() + "_Ft:" + numFt.ToString() + "_Fc:" + numFc.ToString() + "_SC:" + sizeCanvas.ToString() + "_d:" + nameDataset.ToString();
+        string infoTxt = "K:" + K.ToString() + "_St:" + numSt.ToString() + "_Sc:" + numSc.ToString() + "_Ft:" + numFt.ToString() + "_Fc:" + numFc.ToString() + "_SC:" + sizeCanvas.ToString() + "_d:" + nameDataset.ToString() + "_g:" + grayscale.ToString();
         UnityEngine.Debug.Log("BUILDING INFO TXT " + infoTxt);
         info.transform.GetChild(0).name = infoTxt;
 
@@ -114,6 +115,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
             cmtmp.SensorName = traingCam.name;
             cmtmp.Width = sizeCanvas;
             cmtmp.Height = sizeCanvas;
+            cmtmp.Grayscale = grayscale == 1;
 
         }
 
@@ -124,6 +126,9 @@ class SequenceBuildSceneCLI : MonoBehaviour
             cmtmp.SensorName = candidCam.name;
             cmtmp.Width = sizeCanvas;
             cmtmp.Height = sizeCanvas;
+
+            cmtmp.Grayscale = grayscale == 1;
+
         }
 
         // Includes labels, and N*K+K*Q vector3s
@@ -159,6 +164,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         numSc = int.Parse(GetArg("-nSc"));
         numFt = int.Parse(GetArg("-nFt"));
         numFc = int.Parse(GetArg("-nFc"));
+        grayscale = int.Parse(GetArg("-grayscale"));
 
         K = int.Parse(GetArg("-k"));
         sizeCanvas = int.Parse(GetArg("-size_canvas"));

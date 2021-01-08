@@ -70,7 +70,8 @@ public class SequenceLearningTask : Agent
     List<List<Vector3>> gizmoPointHistoryCenterRelativeCT = new List<List<Vector3>>();
     List<Vector3> gizmoMiddlePointsAreaT = new List<Vector3>();
     List<Vector3> gizmoMiddlePointsAreaC = new List<Vector3>();
-    
+
+
 
     public int numEpisodes = 0;
     EnvironmentParameters envParams;
@@ -121,6 +122,7 @@ public class SequenceLearningTask : Agent
         TEST_ORTHOGONAL
     }
 
+ 
     void FillDataset()
     {
 
@@ -140,6 +142,7 @@ public class SequenceLearningTask : Agent
             for (int i = 0; i < children; i++)
             {
                 var obj = thisDataset.transform.GetChild(i);
+                //var newObj = ScaleAndMovePivotObj(obj.gameObject);
                 var newObj = GameObject.Instantiate(obj);
                 newObj.transform.position = new Vector3(0f, 0f, 0f);
                 newObj.transform.parent = datasetObj.transform;
@@ -177,12 +180,9 @@ public class SequenceLearningTask : Agent
 
         GameObject cameraContainer = GameObject.Find("CameraContainer");
         info = GameObject.Find("Info");
-
-
-        string infostr = info.transform.GetChild(0).name;
+        
+        string infostr = info.transform.GetChild(0).name;            
         var tmp = infostr.Split('_');
-
-
         K = int.Parse(tmp[0].Split(':')[1]);
         numSt = int.Parse(tmp[1].Split(':')[1]);
         numSc = int.Parse(tmp[2].Split(':')[1]);
@@ -266,6 +266,7 @@ public class SequenceLearningTask : Agent
             Assert.IsTrue(false, Str);
             K = 1;
         }
+
         Random.InitState(2);
 
     }
@@ -275,6 +276,9 @@ public class SequenceLearningTask : Agent
     {
         if (Application.isPlaying)
         {
+            //Gizmos.color = new Vector4(0.7f, 0.5f, 0.2F, 0.5F);
+
+            //Gizmos.DrawSphere(bb.center, 0.1f); ;
             int index = 0;
             Gizmos.color = new Vector4(0, 0, 1F, 0.5F);
             foreach (perceivableObject q in training)
@@ -455,7 +459,7 @@ public class SequenceLearningTask : Agent
 
         // THIS SHOULD BE POSITIVE! Distance across frames
         public float minDegreeFrames = 14; public float maxDegreeFrames = 15;
-        public float probMatching = 1f;
+        public float probMatching = 0.5f;
         public void UpdateParameters(EnvironmentParameters envParameters)
         {
             distance = envParameters.GetWithDefault("distance", distance);
@@ -717,8 +721,8 @@ public class SequenceLearningTask : Agent
                 (trainingObjIdx, candidateObjIdx) = GetObjIdxFromChannel();
             }
 
-            indexSelectedObjects.Add(trainingObjIdx);
             indexSelectedObjects.Add(candidateObjIdx);
+            indexSelectedObjects.Add(trainingObjIdx);
 
             gizmoTrainingObj.Add(datasetList[trainingObjIdx]);
             gizmoCandidateObjs.Add(datasetList[candidateObjIdx]);
@@ -790,8 +794,11 @@ public class SequenceMLtaskEditor : Editor
     int numFt;
     int numFc;
     int sizeCanvas;
+    int grayscale;
+
     string nameDataset;
     public Object source;
+    public Object dataset_to_adjust;
     void OnEnable()
     {
         var mt = (SequenceLearningTask)target;
@@ -803,7 +810,32 @@ public class SequenceMLtaskEditor : Editor
 
     }
 
+    void ScaleAndMovePivotObj(GameObject gm)
+    {
+        // Assume the hierarchy is gm -> Obj1 (to be left untouched) -> ObjA, ObjB, etc. (with renderer)
+        Bounds bb = new Bounds();
+         
+        int children = gm.transform.GetChild(0).transform.childCount;
 
+        for (int i = 0; i < children; i++)
+        {
+            var obj = gm.transform.GetChild(0).transform.GetChild(i);
+
+            if (i == 0)
+            {
+                bb = obj.GetComponent<Renderer>().bounds;
+            }
+            else
+            {
+                bb.Encapsulate(obj.GetComponent<Renderer>().bounds);
+            }
+        }
+        //GameObject.Find("Sphere").transform.position = bb.center;
+     
+        gm.transform.position = bb.center;
+        float maxSize = 3f;
+        gm.transform.localScale = gm.transform.localScale / (Mathf.Max(Mathf.Max(bb.size.x, bb.size.y), bb.size.z) / maxSize);
+    }
 
     public override void OnInspectorGUI()
     {
@@ -823,12 +855,18 @@ public class SequenceMLtaskEditor : Editor
             numFc = int.Parse(tmp[4].Split(':')[1]);
             sizeCanvas = int.Parse(tmp[5].Split(':')[1]);
             source = GameObject.Find(tmp[6].Split(':')[1]);
+            grayscale = int.Parse(tmp[7].Split(':')[1]);
 
+            GameObject infoDTO = info.transform.GetChild(1).gameObject;
+            string infoDTOstr = infoDTO.name;
+            dataset_to_adjust = GameObject.Find(infoDTOstr.Split(':')[1]);
 
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Size Canvas"), GUILayout.Width(80));
             int currentSC = EditorGUILayout.IntSlider(sizeCanvas, 10, 250);
+            EditorGUILayout.LabelField(new GUIContent("Grayscale"), GUILayout.Width(80));
+            int currentG = EditorGUILayout.Toggle(grayscale == 1) ? 1 : 0;
             EditorGUILayout.EndHorizontal();
 
 
@@ -864,6 +902,47 @@ public class SequenceMLtaskEditor : Editor
             source = EditorGUILayout.ObjectField(source, typeof(Object), true);
             EditorGUILayout.EndHorizontal();
 
+            EditorGUILayout.BeginHorizontal();
+            //EditorGUILayout.LabelField(new GUIContent("->"), GUILayout.Width(70));
+            dataset_to_adjust = EditorGUILayout.ObjectField(dataset_to_adjust, typeof(Object), true);
+            //UnityEngine.Debug.Log(dataset_to_adjust);
+            if (dataset_to_adjust != null)
+            {
+                infoDTO.name = "DTA:" + dataset_to_adjust.name;
+            }
+
+            if (GUILayout.Button("Adjust Dataset"))
+            {
+                GameObject adjusted = (GameObject)GameObject.Instantiate(dataset_to_adjust);
+                adjusted.name = dataset_to_adjust.name + "ADJ";
+
+                adjusted.transform.parent = GameObject.Find(dataset_to_adjust.name).transform.parent;
+                adjusted.transform.localPosition = new Vector3(0f, 0f, 0f);
+                int children = adjusted.transform.childCount;
+
+                for (int i = children - 1; i >= 0; i--)
+                {
+                    UnityEngine.Debug.Log("HERE");
+                    // The hierarchy must be DATASET NAME -> Obj1 (with changed transform) -> Obj1 (just a container with default values) -> ObjA, ObjB, etc with Renderer
+                    // If it's not like the try to fix it
+                    var cc = adjusted.transform.GetChild(i).GetChild(0);
+                    if (cc.GetComponent<Renderer>() != null)
+                    {
+                        int meshChildren = adjusted.transform.GetChild(i).transform.childCount;
+                        GameObject parent = new GameObject(adjusted.transform.GetChild(i).name);
+                        parent.transform.parent = adjusted.transform.GetChild(i);
+                        for (int m = meshChildren - 1; m >= 0; m--)
+                        {
+                            adjusted.transform.GetChild(i).GetChild(m).parent = parent.transform;
+                        }
+                        
+                    }
+                    ScaleAndMovePivotObj(adjusted.transform.GetChild(i).gameObject);
+                }
+
+            }
+            EditorGUILayout.EndHorizontal();
+
             string currentDS = null;
             if (source != null)
             {
@@ -873,7 +952,8 @@ public class SequenceMLtaskEditor : Editor
             if (GUI.changed)
             {
                 if (currentSc != numSc || currentSt != numSt || currentK != K ||
-                    currentFc != numFc || currentFt != numFt || currentSC != sizeCanvas || currentDS != nameDataset)
+                    currentFc != numFc || currentFt != numFt || currentSC != sizeCanvas || 
+                    currentDS != nameDataset || currentG != grayscale)
                 {
                     SequenceBuildSceneCLI.numSt = currentSt;
                     SequenceBuildSceneCLI.numFc = currentFc;
@@ -881,6 +961,9 @@ public class SequenceMLtaskEditor : Editor
                     SequenceBuildSceneCLI.numSc = currentSc;
                     SequenceBuildSceneCLI.K = currentK;
                     SequenceBuildSceneCLI.sizeCanvas = currentSC;
+                    UnityEngine.Debug.Log("GRAYSCALE" + grayscale);
+                    SequenceBuildSceneCLI.grayscale = currentG;
+
 
                     if (currentDS != null)
                     {
