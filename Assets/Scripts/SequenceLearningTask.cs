@@ -14,7 +14,7 @@ using UnityEditor;
 using Frame = UnityEngine.GameObject;
 using UnityEngine.Assertions;
 using Unity.MLAgents.SideChannels;
-
+using System.Linq;
 
 public class SequenceLearningTask : Agent
 {
@@ -76,7 +76,8 @@ public class SequenceLearningTask : Agent
     public int numEpisodes = 0;
     EnvironmentParameters envParams;
     public SimulationParameters simParams = new SimulationParameters();
-    public TaskType taskType; 
+    public TaskType taskType;
+    public TrainComparisonType trainCompType; 
 
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
@@ -118,11 +119,19 @@ public class SequenceLearningTask : Agent
     public enum TaskType
     {
         TRAIN,
-        TEST_SAME_AXIS,
-        TEST_ORTHOGONAL
+        TEST_EDELMAN_SAME_AXIS,
+        TEST_EDELMAN_ORTHOGONAL,
+        TEST_GOKER
     }
 
- 
+    public enum TrainComparisonType
+    {
+        ALL,
+        GROUP
+        //GOKER
+    }
+
+
     void FillDataset()
     {
 
@@ -257,15 +266,43 @@ public class SequenceLearningTask : Agent
         {
             taskType = (TaskType)taskTypeTmp;
         }
-        //UnityEngine.Debug.Log("UNITY>> taskType: " + taskType.ToString());
-        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> taskType: " + taskType.ToString());
-        if (taskType != TaskType.TRAIN && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
+        
+        // TEST EDELMAN
+        if ((taskType == TaskType.TEST_EDELMAN_ORTHOGONAL || taskType == TaskType.TEST_EDELMAN_SAME_AXIS) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
         {
-            string Str = "UNITY >> This test task is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
+            string Str = "UNITY >> TaskType [TEST_EDELMAN] is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
             Assert.IsTrue(false, Str);
             K = 1;
         }
+        // TEST GOKER
+        if ((taskType == TaskType.TEST_GOKER) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
+        {
+            string Str = "UNITY >> TaskType [TEST_GOKER] is designed to work only for K = 1, numSt = 1, numFt = 1. Build the scene again!";
+            sendDebugLogChannel.SendEnvInfoToPython(Str);
+            Assert.IsTrue(false, Str);
+            K = 1;
+        }
+
+
+
+        var compTmp = (int)envParams.GetWithDefault("trainComparisonType", -1f);
+        if (compTmp != -1)
+        {
+            trainCompType = (TrainComparisonType)compTmp;
+        }
+
+        if (trainCompType == TrainComparisonType.GROUP && taskType != TaskType.TRAIN)
+        {
+            string Str = "UNITY >> Comparison Type [GROUP] can only work with Task Type [TRAIN].";
+            sendDebugLogChannel.SendEnvInfoToPython(Str);
+            taskType = TaskType.TRAIN;
+            Assert.IsTrue(false);
+        }
+
+        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> taskType: " + taskType.ToString());
+        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> trainComparisonType: " + trainCompType.ToString());
+
 
         Random.InitState(2);
 
@@ -508,7 +545,30 @@ public class SequenceLearningTask : Agent
         {
             do
             {
-                candidateObjIdx = Random.Range(0, datasetList.Count);
+                switch (trainCompType)
+                {
+                    case TrainComparisonType.ALL:
+                        candidateObjIdx = Random.Range(0, datasetList.Count);
+                        break;
+                    case TrainComparisonType.GROUP:
+                        switch (nameDataset)
+                        {
+                            case var ss when nameDataset.Contains("ShapeNet"):
+                                var nameGroup = datasetList[trainingObjIdx].name.Split('.')[0];
+                                List<int> allIndices = new List<int>(datasetList.Select((go, i) => new { GameObj = go, Index = i })
+                                                                                 .Where(x => x.GameObj.name.Split('.')[0] == nameGroup)
+                                                                                 .Select(x => x.Index));
+                                candidateObjIdx = allIndices[Random.Range(0, allIndices.Count)];
+                                UnityEngine.Debug.Log("TRAIN OBJ: " + datasetList[trainingObjIdx].name + " CAND OBJ: " + datasetList[candidateObjIdx].name);
+                                break;
+                        }
+                        break;
+
+                    default:
+                        Assert.IsTrue(false, "COMPARISON TYPE NOT IMPLEMENTED");
+                        break;
+                }
+             
             } while (candidateObjIdx == trainingObjIdx);
         }
         return (trainingObjIdx, candidateObjIdx);
@@ -594,10 +654,10 @@ public class SequenceLearningTask : Agent
         gizmoPointHistoryCenterRelativeCT[k].Add(diffPos + objPosT);
     }
 
-    public void SetCamearPositionTest(int k, int trainingObjIdx, int candidateObjIdx)
+    public void SetCameraPositionEdelman(int k, int trainingObjIdx, int candidateObjIdx)
     {
-        int degree = (int)envParams.GetWithDefault("degree", (numEpisodes-1)* 10);
-        int rotation = (int)envParams.GetWithDefault("rotation", (numEpisodes-1) * 10);
+        int candidateCamDegree = (int)envParams.GetWithDefault("degree", (numEpisodes-1)* 10);
+        int candidateCamRotation = (int)envParams.GetWithDefault("rotation", (numEpisodes-1) * 10);
         
         var objPosT = datasetList[trainingObjIdx].transform.position;
         var objToLookAtT = datasetList[trainingObjIdx].transform;
@@ -610,20 +670,20 @@ public class SequenceLearningTask : Agent
         int sc = 0;
         int fsc = 0;
         Vector3 positionObj = new Vector3(0f, 0f, 0f);
-        if (taskType == TaskType.TEST_SAME_AXIS)
+        if (taskType == TaskType.TEST_EDELMAN_SAME_AXIS)
         {
-            positionObj = GetPositionAroundSphere(90, rotation + degree, Vector3.up) * simParams.distance;
+            positionObj = GetPositionAroundSphere(90, candidateCamRotation + candidateCamDegree, Vector3.up) * simParams.distance;
 
         }
-        if (taskType == TaskType.TEST_ORTHOGONAL)
+        if (taskType == TaskType.TEST_EDELMAN_ORTHOGONAL)
         {
-            int rotation_ortho = rotation; 
-            if (degree > 90 && degree < 270)
+            int rotation_ortho = candidateCamRotation; 
+            if (candidateCamDegree > 90 && candidateCamDegree < 270)
             {
                 rotation_ortho += 180;
             }
-            UnityEngine.Debug.Log("D: " + (90 + degree).ToString() + "R: " + rotation);
-            positionObj = GetPositionAroundSphere(90 + degree, rotation_ortho, Vector3.up) * simParams.distance;
+            UnityEngine.Debug.Log("D: " + (90 + candidateCamDegree).ToString() + "R: " + candidateCamRotation);
+            positionObj = GetPositionAroundSphere(90 + candidateCamDegree, rotation_ortho, Vector3.up) * simParams.distance;
 
         }
 
@@ -638,17 +698,17 @@ public class SequenceLearningTask : Agent
             if (st == 0)
             {
                 positionsTcameras.Clear();
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 15, Vector3.up) * simParams.distance);
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation + 0, Vector3.up) * simParams.distance);
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 15, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 15, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 0, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation - 15, Vector3.up) * simParams.distance);
 
             }
             if (st == 1)
             {
                 positionsTcameras.Clear();
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 60, Vector3.up) * simParams.distance);
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 75, Vector3.up) * simParams.distance);
-                positionsTcameras.Add(GetPositionAroundSphere(90, rotation - 90, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation - 60, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation - 75, Vector3.up) * simParams.distance);
+                positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation - 90, Vector3.up) * simParams.distance);
 
             }
 
@@ -666,7 +726,32 @@ public class SequenceLearningTask : Agent
         }       
     }
 
-   
+    public void SetCameraPositionGoker(int k, int trainingObjIdx, int candidateObjIdx)
+    {
+        //int candidateCamDegree = (int)envParams.GetWithDefault("degree", (numEpisodes - 1) * 10);
+        int trainingCamAzimuth = (int)envParams.GetWithDefault("azimuthT", (numEpisodes - 1) * 2);
+        int candidateCamAzimuth = (int)envParams.GetWithDefault("azimuthC", (numEpisodes - 1) * 10);
+
+
+        var objPosT = datasetList[trainingObjIdx].transform.position;
+        var objToLookAtT = datasetList[trainingObjIdx].transform;
+
+        var objPosC = datasetList[candidateObjIdx].transform.position;
+        var objToLookAtC = datasetList[candidateObjIdx].transform;
+
+        var positionCamC = GetPositionAroundSphere(45, candidateCamAzimuth, Vector3.up) * simParams.distance;
+        var positionCamT = GetPositionAroundSphere(45, trainingCamAzimuth, Vector3.up) * simParams.distance;
+
+
+        candidates[0].sequences[0].frames[0].transform.position = objPosC + positionCamC;
+        candidates[0].sequences[0].frames[0].transform.LookAt(objToLookAtC, Vector3.up);
+        cameraPositions.Add(candidates[0].sequences[0].frames[0].transform.position - objPosC);
+
+        training[0].sequences[0].frames[0].transform.position = objPosT + positionCamT;
+        training[0].sequences[0].frames[0].transform.LookAt(objToLookAtT, Vector3.up);
+        cameraPositions.Add(training[0].sequences[0].frames[0].transform.position - objPosT);
+    }
+
     public (int t, int c) GetObjIdxFromChannel()
     {
         int trainingObjIdx = (int)envParams.GetWithDefault("objT", 0f);
@@ -677,27 +762,24 @@ public class SequenceLearningTask : Agent
 
     public override void OnEpisodeBegin()
     {
-        
+
         newLevel = envParams.GetWithDefault("newLevel", newLevel);
         // This default is used ONLY IF THE "newLevel" IS NEVER RECEIVED! Otherwise the default is the PREVIOUS one!!!
 
         if (newLevel == 1f)
         {
             simParams.UpdateParameters(envParams);
-            sendDebugLogChannel.SendEnvInfoToPython( "UNITY >> Parameters Updated: \nDistance [" + simParams.distance.ToString() + "]" +
+            sendDebugLogChannel.SendEnvInfoToPython("UNITY >> Parameters Updated: \nDistance [" + simParams.distance.ToString() + "]" +
             "\nCenterPointInclTcameras: [" + simParams.minCenterPointInclTcameras + "," + simParams.maxCenterPointInclTcameras + "]" +
             "\nCenterPointInclCcameras: [" + simParams.minCenterPointInclCcameras + "," + simParams.maxCenterPointInclCcameras + "]" +
             "\nareaInclTcameras: [" + simParams.areaInclTcameras + "]" +
             "\nareaAziTcameras: [" + simParams.areaAziTcameras + "]" +
             "\nDegreeFrames: [" + simParams.minDegreeFrames + "," + simParams.maxDegreeFrames + "]" +
             "\nareaInclCcameras: [" + simParams.areaInclCcameras + "]" +
-            "\nareaAziCcameras: [" + simParams.areaAziCcameras + "]" + 
+            "\nareaAziCcameras: [" + simParams.areaAziCcameras + "]" +
             "\nprobMatching: [" + simParams.probMatching + "]" +
             "\n<< UNITY.");
         }
-
-
-
         //Assert.IsTrue(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeCandidatesCamera && maxDegreeQueriesCamera + minDegreeSQcameras < maxDegreeCandidatesCamera);
         //if (!(minDegreeQueryCamera + maxDegreeSQcameras > minDegreeCandidatesCamera && maxDegreeQueriesCamera + minDegreeSQcameras < maxDegreeCandidatesCamera))
         //{
@@ -707,11 +789,10 @@ public class SequenceLearningTask : Agent
         //}
         ClearVarForEpisode();
 
-
         for (int k = 0; k < K; k++)
         {
             int trainingObjIdx;
-            int candidateObjIdx; 
+            int candidateObjIdx;
             if (taskType == TaskType.TRAIN)
             {
                 (trainingObjIdx, candidateObjIdx) = GetObjIdxRandom();
@@ -726,21 +807,26 @@ public class SequenceLearningTask : Agent
 
             gizmoTrainingObj.Add(datasetList[trainingObjIdx]);
             gizmoCandidateObjs.Add(datasetList[candidateObjIdx]);
-            if (taskType == TaskType.TRAIN)
+            switch (taskType)
             {
-                SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
+                case TaskType.TRAIN:
+                    SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
+                    break;
+                case TaskType.TEST_EDELMAN_ORTHOGONAL:
+                case TaskType.TEST_EDELMAN_SAME_AXIS:
+                    SetCameraPositionEdelman(k, trainingObjIdx, candidateObjIdx);
+                    break;
+                case TaskType.TEST_GOKER:
+                    SetCameraPositionGoker(k, trainingObjIdx, candidateObjIdx);
+                    break;
+
             }
-            else
-            {
-                SetCamearPositionTest(k, trainingObjIdx, candidateObjIdx);
-            }
+
+            numEpisodes += 1;
+            //UnityEngine.Debug.Break();
+            this.RequestDecision();
         }
-
-        numEpisodes += 1;
-        //UnityEngine.Debug.Break();
-        this.RequestDecision();
     }
-
     
     IEnumerator waiter()
     {
@@ -860,7 +946,6 @@ public class SequenceMLtaskEditor : Editor
             GameObject infoDTO = info.transform.GetChild(1).gameObject;
             string infoDTOstr = infoDTO.name;
             dataset_to_adjust = GameObject.Find(infoDTOstr.Split(':')[1]);
-
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Size Canvas"), GUILayout.Width(80));
