@@ -76,8 +76,8 @@ public class SequenceLearningTask : Agent
     public int numEpisodes = 0;
     EnvironmentParameters envParams;
     public SimulationParameters simParams = new SimulationParameters();
-    public TaskType taskType;
-    public TrainComparisonType trainCompType; 
+    public TrialType trialType = TrialType.RND_TRIAL;
+    public TrainComparisonType trainCompType = TrainComparisonType.ALL; 
 
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
@@ -116,12 +116,12 @@ public class SequenceLearningTask : Agent
         }
     }
 
-    public enum TaskType
+    public enum TrialType
     {
-        TRAIN,
-        TEST_EDELMAN_SAME_AXIS,
-        TEST_EDELMAN_ORTHOGONAL,
-        TEST_GOKER
+        RND_TRIAL,
+        DET_TRIAL_EDELMAN_SAME_AXIS,
+        DET_TRIAL_EDELMAN_ORTHOGONAL,
+        DET_TRIAL_GOKER
     }
 
     public enum TrainComparisonType
@@ -145,7 +145,10 @@ public class SequenceLearningTask : Agent
         {
             var thisDataset = GameObject.Find(datasetStr);
             if (thisDataset == null)
+            {
                 Assert.IsTrue(false, "Dataset " + nameDataset + " not found.");
+                sendDebugLogChannel.SendEnvInfoToPython("UNITY >> Dataset " + nameDataset + " not found!");
+            }   
             int children = thisDataset.transform.childCount;
 
             for (int i = 0; i < children; i++)
@@ -153,6 +156,7 @@ public class SequenceLearningTask : Agent
                 var obj = thisDataset.transform.GetChild(i);
                 //var newObj = ScaleAndMovePivotObj(obj.gameObject);
                 var newObj = GameObject.Instantiate(obj);
+                newObj.name = obj.name;
                 newObj.transform.position = new Vector3(0f, 0f, 0f);
                 newObj.transform.parent = datasetObj.transform;
                 datasetList.Add(newObj.gameObject);
@@ -198,6 +202,7 @@ public class SequenceLearningTask : Agent
         numFt = int.Parse(tmp[3].Split(':')[1]);
         numFc = int.Parse(tmp[4].Split(':')[1]);
         sizeCanvas = int.Parse(tmp[5].Split(':')[1]);
+        //sendDebugLogChannel.SendEnvInfoToPython("UNITIY COMPTMP : " + trainCompType);
 
         sendDebugLogChannel.SendEnvInfoToPython("SLT From Unity Info: \nK: " + K.ToString() + " St: " + numSt.ToString() + " Sc: " + numSc.ToString() + " Ft: " + numFt.ToString() + " Fc: " + numFc.ToString() + " size_canvas: " + sizeCanvas.ToString());
         int totIndex = 0;
@@ -261,26 +266,26 @@ public class SequenceLearningTask : Agent
 
 
         envParams = Academy.Instance.EnvironmentParameters;
-        var taskTypeTmp = (int)envParams.GetWithDefault("taskType", -1f);
-        if (taskTypeTmp != -1)
+        var trialType = (int)envParams.GetWithDefault("trialType", -1f);
+        if (trialType != -1)
         {
-            taskType = (TaskType)taskTypeTmp;
+            this.trialType = (TrialType)trialType;
         }
         
         // TEST EDELMAN
-        if ((taskType == TaskType.TEST_EDELMAN_ORTHOGONAL || taskType == TaskType.TEST_EDELMAN_SAME_AXIS) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
+        if ((this.trialType == TrialType.DET_TRIAL_EDELMAN_ORTHOGONAL || this.trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
         {
-            string Str = "UNITY >> TaskType [TEST_EDELMAN] is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
+            string Str = "UNITY >> TrialType [TEST_EDELMAN] is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
-            Assert.IsTrue(false, Str);
+            //Assert.IsTrue(false, Str);
             K = 1;
         }
         // TEST GOKER
-        if ((taskType == TaskType.TEST_GOKER) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
+        if ((this.trialType == TrialType.DET_TRIAL_GOKER) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
         {
-            string Str = "UNITY >> TaskType [TEST_GOKER] is designed to work only for K = 1, numSt = 1, numFt = 1. Build the scene again!";
+            string Str = "UNITY >> TrialType [TEST_GOKER] is designed to work only for K = 1, numSt = 1, numFt = 1. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
-            Assert.IsTrue(false, Str);
+            //Assert.IsTrue(false, Str);
             K = 1;
         }
 
@@ -289,18 +294,24 @@ public class SequenceLearningTask : Agent
         var compTmp = (int)envParams.GetWithDefault("trainComparisonType", -1f);
         if (compTmp != -1)
         {
+            //sendDebugLogChannel.SendEnvInfoToPython("HERE");
+
             trainCompType = (TrainComparisonType)compTmp;
         }
+        //sendDebugLogChannel.SendEnvInfoToPython("UNITIY COMPTMP : " + trainCompType);
+        //sendDebugLogChannel.SendEnvInfoToPython("cco : " + compTmp);
 
-        if (trainCompType == TrainComparisonType.GROUP && taskType != TaskType.TRAIN)
+
+
+        if (trainCompType == TrainComparisonType.GROUP && this.trialType != TrialType.RND_TRIAL)
         {
-            string Str = "UNITY >> Comparison Type [GROUP] can only work with Task Type [TRAIN].";
+            string Str = "UNITY >> Comparison Type [GROUP] can only work with Trial Type [TRAIN].";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
-            taskType = TaskType.TRAIN;
-            Assert.IsTrue(false);
+            this.trialType = TrialType.RND_TRIAL;
+            //Assert.IsTrue(false);
         }
 
-        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> taskType: " + taskType.ToString());
+        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> TrialType: " + this.trialType.ToString());
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> trainComparisonType: " + trainCompType.ToString());
 
 
@@ -482,10 +493,10 @@ public class SequenceLearningTask : Agent
         public float maxCenterPointAziCcameras = 360;
 
         // from 0 to 180 / 360, it's degree and direction of the area around the center point for training cameras.
-        public float areaInclTcameras = 120;
+        public float areaInclTcameras = 1;
         public float areaAziTcameras = 359;
 
-        public float areaInclCcameras = 120; 
+        public float areaInclCcameras = 1; 
         public float areaAziCcameras = 359;
 
         // DISTANCE
@@ -559,7 +570,15 @@ public class SequenceLearningTask : Agent
                                                                                  .Where(x => x.GameObj.name.Split('.')[0] == nameGroup)
                                                                                  .Select(x => x.Index));
                                 candidateObjIdx = allIndices[Random.Range(0, allIndices.Count)];
-                                UnityEngine.Debug.Log("TRAIN OBJ: " + datasetList[trainingObjIdx].name + " CAND OBJ: " + datasetList[candidateObjIdx].name);
+                                //UnityEngine.Debug.Log("TRAIN OBJ: " + datasetList[trainingObjIdx].name + " CAND OBJ: " + datasetList[candidateObjIdx].name);
+                                break;
+                            case var ss when nameDataset.Contains("GokerCuboids"):
+                                var nameGroupC = datasetList[trainingObjIdx].name.Split('_')[0];
+                                List<int> allIndicesC = new List<int>(datasetList.Select((go, i) => new { GameObj = go, Index = i })
+                                                                                 .Where(x => x.GameObj.name.Split('_')[0] == nameGroupC)
+                                                                                 .Select(x => x.Index));
+                                candidateObjIdx = allIndicesC[Random.Range(0, allIndicesC.Count)];
+                                //UnityEngine.Debug.Log("TRAIN OBJ: " + datasetList[trainingObjIdx].name + " CAND OBJ: " + datasetList[candidateObjIdx].name);
                                 break;
                         }
                         break;
@@ -670,12 +689,12 @@ public class SequenceLearningTask : Agent
         int sc = 0;
         int fsc = 0;
         Vector3 positionObj = new Vector3(0f, 0f, 0f);
-        if (taskType == TaskType.TEST_EDELMAN_SAME_AXIS)
+        if (trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS)
         {
             positionObj = GetPositionAroundSphere(90, candidateCamRotation + candidateCamDegree, Vector3.up) * simParams.distance;
 
         }
-        if (taskType == TaskType.TEST_EDELMAN_ORTHOGONAL)
+        if (trialType == TrialType.DET_TRIAL_EDELMAN_ORTHOGONAL)
         {
             int rotation_ortho = candidateCamRotation; 
             if (candidateCamDegree > 90 && candidateCamDegree < 270)
@@ -793,7 +812,7 @@ public class SequenceLearningTask : Agent
         {
             int trainingObjIdx;
             int candidateObjIdx;
-            if (taskType == TaskType.TRAIN)
+            if (trialType == TrialType.RND_TRIAL)
             {
                 (trainingObjIdx, candidateObjIdx) = GetObjIdxRandom();
             }
@@ -807,16 +826,16 @@ public class SequenceLearningTask : Agent
 
             gizmoTrainingObj.Add(datasetList[trainingObjIdx]);
             gizmoCandidateObjs.Add(datasetList[candidateObjIdx]);
-            switch (taskType)
+            switch (trialType)
             {
-                case TaskType.TRAIN:
+                case TrialType.RND_TRIAL:
                     SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
                     break;
-                case TaskType.TEST_EDELMAN_ORTHOGONAL:
-                case TaskType.TEST_EDELMAN_SAME_AXIS:
+                case TrialType.DET_TRIAL_EDELMAN_ORTHOGONAL:
+                case TrialType.DET_TRIAL_EDELMAN_SAME_AXIS:
                     SetCameraPositionEdelman(k, trainingObjIdx, candidateObjIdx);
                     break;
-                case TaskType.TEST_GOKER:
+                case TrialType.DET_TRIAL_GOKER:
                     SetCameraPositionGoker(k, trainingObjIdx, candidateObjIdx);
                     break;
 
@@ -898,15 +917,17 @@ public class SequenceMLtaskEditor : Editor
 
     void ScaleAndMovePivotObj(GameObject gm)
     {
-        // Assume the hierarchy is gm -> Obj1 (to be left untouched) -> ObjA, ObjB, etc. (with renderer)
-        Bounds bb = new Bounds();
-         
-        int children = gm.transform.GetChild(0).transform.childCount;
 
+
+        // Assume the hierarchy is gm -> Obj1 (change the position) -> ObjA, ObjB, etc. (with renderer)
+        Bounds bb = new Bounds();
+        int children = gm.transform.GetChild(0).transform.childCount;
+        UnityEngine.Debug.Log("CHILDREN: " + children);
+        //var i = 3;
         for (int i = 0; i < children; i++)
         {
             var obj = gm.transform.GetChild(0).transform.GetChild(i);
-
+             UnityEngine.Debug.Log(obj.name);
             if (i == 0)
             {
                 bb = obj.GetComponent<Renderer>().bounds;
@@ -916,11 +937,18 @@ public class SequenceMLtaskEditor : Editor
                 bb.Encapsulate(obj.GetComponent<Renderer>().bounds);
             }
         }
-        //GameObject.Find("Sphere").transform.position = bb.center;
-     
-        gm.transform.position = bb.center;
+        ////gm.transform.GetChild(0).position 
+        ///
+        //gm.transform.GetChild(0).position -= bb.center;
+        var center = bb.center;
+        var size = bb.size;
+        UnityEngine.Debug.Log("HERE: " + (gm.transform.GetChild(0).transform.position - center));
+        UnityEngine.Debug.Log("bb center: " + center);
+        gm.transform.GetChild(0).transform.position += (gm.transform.GetChild(0).transform.position - center); 
+        //GameObject.Find("Cube").transform.position = bb.center;
+
         float maxSize = 3f;
-        gm.transform.localScale = gm.transform.localScale / (Mathf.Max(Mathf.Max(bb.size.x, bb.size.y), bb.size.z) / maxSize);
+        gm.transform.localScale = gm.transform.localScale / (Mathf.Max(Mathf.Max(size.x, size.y), size.z) / maxSize);
     }
 
     public override void OnInspectorGUI()
@@ -998,32 +1026,45 @@ public class SequenceMLtaskEditor : Editor
 
             if (GUILayout.Button("Adjust Dataset"))
             {
-                GameObject adjusted = (GameObject)GameObject.Instantiate(dataset_to_adjust);
+                GameObject adjusted = (GameObject)GameObject.Instantiate(dataset_to_adjust, GameObject.Find(dataset_to_adjust.name).transform.parent);
                 adjusted.name = dataset_to_adjust.name + "ADJ";
-
-                adjusted.transform.parent = GameObject.Find(dataset_to_adjust.name).transform.parent;
                 adjusted.transform.localPosition = new Vector3(0f, 0f, 0f);
-                int children = adjusted.transform.childCount;
 
-                for (int i = children - 1; i >= 0; i--)
+
+                //int children = adjusted.transform.childCount;
+
+                List<GameObject> Children = new List<GameObject>(); ;
+                foreach (Transform child in adjusted.transform)
+                {
+                    
+                        Children.Add(child.gameObject);
+                }
+                foreach (var child in Children)
                 {
                     UnityEngine.Debug.Log("HERE");
                     // The hierarchy must be DATASET NAME -> Obj1 (with changed transform) -> Obj1 (just a container with default values) -> ObjA, ObjB, etc with Renderer
                     // If it's not like the try to fix it
-                    var cc = adjusted.transform.GetChild(i).GetChild(0);
+                    var cc = child.transform.GetChild(0);
+                    GameObject newParent = child;
                     if (cc.GetComponent<Renderer>() != null)
                     {
-                        int meshChildren = adjusted.transform.GetChild(i).transform.childCount;
-                        GameObject parent = new GameObject(adjusted.transform.GetChild(i).name);
-                        parent.transform.parent = adjusted.transform.GetChild(i);
-                        for (int m = meshChildren - 1; m >= 0; m--)
-                        {
-                            adjusted.transform.GetChild(i).GetChild(m).parent = parent.transform;
-                        }
+                        //adjusted.transform.GetChild(i).localPosition = new Vector3(0f, 0f, 0f);
+                        //int meshChildren = adjusted.transform.GetChild(i).transform.childCount;
+                        newParent = new GameObject(child.name);
+                        //newParent = new GameObject("PARENT");
+                        newParent.transform.parent = adjusted.transform;
+                        newParent.transform.localPosition = new Vector3(0f, 0f, 0f);
+
+                        child.transform.parent = newParent.transform;
+                        //for (int m = meshChildren - 1; m >= 0; m--)
+                        //{
+                        //    adjusted.transform.GetChild(i).GetChild(m).parent = newParent.transform;
+                        //}
                         
                     }
-                    ScaleAndMovePivotObj(adjusted.transform.GetChild(i).gameObject);
+                    ScaleAndMovePivotObj(newParent);
                 }
+                //GameObject.Find(dataset_to_adjust.name).SetActive(false);
 
             }
             EditorGUILayout.EndHorizontal();
