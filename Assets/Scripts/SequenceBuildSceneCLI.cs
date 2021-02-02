@@ -133,7 +133,8 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
         // Includes labels, and N*K+K*Q vector3s
         //UnityEngine.Debug.Log((N * K + K * Q) + 3 * (N * K + K * Q));
-        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = (K * 2) + (numFt * numSt + numFc * numSc) * K * 3;
+        // If numSc is 0, then we only send 1 set of labels (the training ones), otherwise we send two (training and the paired one)
+        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = (K * (numSc>0?2:1)) + (numFt * numSt + numFc * numSc) * K * 3;
 
 #if UNITY_EDITOR
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
