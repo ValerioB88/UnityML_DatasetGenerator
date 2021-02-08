@@ -132,6 +132,16 @@ public class SequenceLearningTask : Agent
 
     public void Awake()
     {
+        var cmlSeed = Helper.GetArg("-seed");
+        if (cmlSeed != null)
+        {
+            Random.InitState(int.Parse(cmlSeed));
+            UnityEngine.Debug.Log("Seed set at " + cmlSeed);
+        }
+        else
+        {
+            Random.InitState(2);
+        }
         // We create the Side Channel
         sendEnvParamsChannel = new StringLogSideChannel("621f0a70-4f87-11ea-a6bf-784f4387d1f7");
         sendDebugLogChannel = new StringLogSideChannel("8e8d2cbd-ea04-444d-9180-56ed79a2b94e");
@@ -407,15 +417,12 @@ public class SequenceLearningTask : Agent
             {
                 foreach (var item in datasetList)
                 {
-                    new DirectoryInfo(Path.Combine(new string[] { Application.dataPath + "\\..\\", saveDatasetDir, item.classNumber.ToString() })).Create();
+                    new DirectoryInfo(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, item.classNumber.ToString() })).Create();
 
                 }
             }
 
         }
-
-        Random.InitState(2);
-
     }
 
     private void QuitApplication()
@@ -1106,7 +1113,7 @@ public class SequenceLearningTask : Agent
         if (indexBatch % 10 == 0 && (batchRepeated -1) == 0)
         {
             double elps = stopWatchBatches.Elapsed.TotalSeconds;
-            msg += "10 Batches: " + elps + " sec, " + elps/((float)K * 10) + "sec x obj \n";
+            msg += "10 Batches: " + elps + " sec, " + elps/((float)datasetList.Count * 10) + "sec x obj \n";
             stopWatchBatches.Restart();
         }
         if (batchRepeated - 1 == 0)
