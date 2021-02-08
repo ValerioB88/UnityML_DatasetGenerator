@@ -54,13 +54,15 @@ public class SequenceLearningTask : Agent
 
     [HideInInspector]
     public int repeatSameBatch = -1;
+
+    int imgsSaved = 0;
     private int batchRepeated = 0;
 
     [HideInInspector]
     public bool saveFramesOnDisk;
     
     [HideInInspector]
-    public string savingDatasetDir = "../dataset/"; 
+    public string saveDatasetDir = "../generated_datasets/mydat/"; 
 
     int numSt = 1;
     int numSc = 1;
@@ -68,6 +70,8 @@ public class SequenceLearningTask : Agent
     int numFc = 1;
     int K = 2;
     int sizeCanvas = 64;
+
+    int indexBatch = -1;
     [HideInInspector]
     public string nameDataset = "none";
     float newLevel = 0f;
@@ -79,7 +83,7 @@ public class SequenceLearningTask : Agent
         public List<GameObject> cameraObjs = new List<GameObject>();
     }
 
-    public class ObjectCameras
+    public class ObjectCameraSet
     {
         public List<SequenceCameras> sequences = new List<SequenceCameras>();
     }
@@ -91,8 +95,8 @@ public class SequenceLearningTask : Agent
             classIdx = idx; 
         }
     }
-    List<(ObjectCameras objCamera, ClassIdxDummy classIdx)> candidates = new List<(ObjectCameras objCamera, ClassIdxDummy classIdx)>();
-    List<(ObjectCameras objCamera, ClassIdxDummy classIdx)> training = new List<(ObjectCameras objCamera, ClassIdxDummy classIdx)>();
+    List<(ObjectCameraSet objCamera, ClassIdxDummy classIdx)> candidates = new List<(ObjectCameraSet objCamera, ClassIdxDummy classIdx)>();
+    List<(ObjectCameraSet objCamera, ClassIdxDummy classIdx)> training = new List<(ObjectCameraSet objCamera, ClassIdxDummy classIdx)>();
 
 
     List<Vector3> gizmoMiddlePointsSequenceC = new List<Vector3>();
@@ -104,15 +108,17 @@ public class SequenceLearningTask : Agent
     List<Vector3> gizmoMiddlePointsAreaC = new List<Vector3>();
     List<GameObject> lights = new List<GameObject>();
 
-
     int numEpisodes = 0;
     EnvironmentParameters envParams;
     public SimulationParameters simParams = new SimulationParameters();
     
     [HideInInspector]
-    public TrialType trialType = TrialType.RND_TRIAL;
+    public PlaceCamerasMode placeCameraMode = PlaceCamerasMode.RND;
+    [HideInInspector]
+    public GetLabelsMode getLabelsMode = GetLabelsMode.RND;
     [HideInInspector]
     public TrainComparisonType trainCompType = TrainComparisonType.ALL;
+    Stopwatch stopWatchBatches = new Stopwatch();
 
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
@@ -124,9 +130,6 @@ public class SequenceLearningTask : Agent
         }
     }
 
-
-
-
     public void Awake()
     {
         // We create the Side Channel
@@ -136,8 +139,6 @@ public class SequenceLearningTask : Agent
         // The channel must be registered with the SideChannelManager class
         SideChannelManager.RegisterSideChannel(sendEnvParamsChannel);
         SideChannelManager.RegisterSideChannel(sendDebugLogChannel);
-
-
     }
 
     public void OnDestroy()
@@ -147,27 +148,30 @@ public class SequenceLearningTask : Agent
         {
             SideChannelManager.UnregisterSideChannel(sendEnvParamsChannel);
             SideChannelManager.UnregisterSideChannel(sendDebugLogChannel);
-
         }
     }
 
-    public enum TrialType
+    public enum GetLabelsMode
     {
-        RND_TRIAL,
-        DET_TRIAL_EDELMAN_SAME_AXIS_HOR,
-        DET_TRIAL_EDELMAN_ORTHO_HOR,
-        DET_TRIAL_EDELMAN_SAME_AXIS_VER,
-        DET_TRIAL_EDELMAN_ORTHO_VER,
-        DET_TRIAL_STATIC
+        RND,
+        SEQUENTIAL,
+        FROM_CHANNEL
+    }
+    public enum PlaceCamerasMode
+    {
+        RND,
+        DET_EDELMAN_SAME_AXIS_HOR,
+        DET_EDELMAN_ORTHO_HOR,
+        DET_EDELMAN_SAME_AXIS_VER,
+        DET_EDELMAN_ORTHO_VER,
+        FROM_CHANNEL
     }
 
     public enum TrainComparisonType
     {
         ALL,
         GROUP
-        //GOKER
     }
-
 
     void FillDataset()
     {
@@ -199,7 +203,7 @@ public class SequenceLearningTask : Agent
                 newObj.name = obj.name;
                 newObj.transform.position = new Vector3(0f, 0f, 0f);
                 newObj.transform.parent = datasetObj.transform;
-                datasetList.Add((newObj.gameObject, 0));
+                datasetList.Add((newObj.gameObject, totChildren));
                 datasetList[datasetList.Count - 1].gm.transform.position = new Vector3(15 * totChildren, 0, 0);
                 totChildren += 1;
                 //mapNameToNum.Add(datasetList[i].name, i);
@@ -213,25 +217,9 @@ public class SequenceLearningTask : Agent
     }
 
 
-    private static string GetArg(string name)
-    {
-        UnityEngine.Debug.Log("I AM HERE READING YOUR COMMAND LINE");
-
-        var args = System.Environment.GetCommandLineArgs();
-        for (int i = 0; i < args.Length; i++)
-        {
-            UnityEngine.Debug.Log(args[i]);
-            if (args[i] == name && args.Length > i + 1)
-            {
-                return args[i + 1];
-            }
-        }
-        return null;
-    }
-
     void Start()
     {
-
+        stopWatchBatches.Start();
         GameObject cameraContainer = GameObject.Find("CameraContainer");
         info = GameObject.Find("Info");
 
@@ -251,7 +239,7 @@ public class SequenceLearningTask : Agent
         for (int k = 0; k < K; k++)
         {
             gizmoPointHistoryCenterRelativeCT.Add(new List<Vector3>());
-            training.Add((new ObjectCameras(), new ClassIdxDummy(k)));
+            training.Add((new ObjectCameraSet(), new ClassIdxDummy(k)));
            
             for (int sq = 0; sq < numSt; sq++)
             {
@@ -259,11 +247,8 @@ public class SequenceLearningTask : Agent
 
                 for (int fsq = 0; fsq < numFt; fsq++)
                 {
-                    tmpName = "T" + k.ToString("D2") + "S" + sq + "F" + fsq;
+                    tmpName = "T" + k.ToString("D3") + "S" + sq.ToString("D3") + "F" + fsq.ToString("D3");
                     training[k].objCamera.sequences[sq].cameraObjs.Add(cameraContainer.transform.Find(tmpName).gameObject);
-                    //trainingCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
-                    //cameraPositions.Add(new Vector3(0f, 0f, 0f));
-
                     totIndex += 1;
                 }
             }
@@ -272,42 +257,70 @@ public class SequenceLearningTask : Agent
         totIndex = 0;
         for (int k = 0; k < K; k++)
         {
-            candidates.Add((new ObjectCameras(), new ClassIdxDummy(k)));
+            candidates.Add((new ObjectCameraSet(), new ClassIdxDummy(k)));
             for (int sc = 0; sc < numSc; sc++)
             {
                 candidates[k].objCamera.sequences.Add(new SequenceCameras());
 
                 for (int fsc = 0; fsc < numFc; fsc++)
                 {
-                    tmpName = "C" + k.ToString("D2") + "S" + sc + "F" + fsc;
+                    tmpName = "C" + k.ToString("D3") + "S" + sc.ToString("D3") + "F" + fsc.ToString("D3");
                     candidates[k].objCamera.sequences[sc].cameraObjs.Add(cameraContainer.transform.Find(tmpName).gameObject);
-                    //candidateCameraPosRelativeToObj.Add(new Vector3(0f, 0f, 0f));
-                    //cameraPositions.Add(new Vector3(0f, 0f, 0f));
-
                     totIndex += 1;
                 }
             }
         }
 
+
+        var cmlUseBatchProv = Helper.GetArg("-use_batch_provider");
+        if (cmlUseBatchProv != null)
+        {
+            useBatchProvider = int.Parse(cmlUseBatchProv) == 1;
+            UnityEngine.Debug.Log("Using batch provider from the command line");
+        }
+        var cmlNameDataset = Helper.GetArg("-dataset");
+        if (cmlNameDataset != null)
+        {
+            nameDataset = cmlNameDataset;
+            UnityEngine.Debug.Log("New Dataset from command line: " + nameDataset);
+        }
+
+        var cmlSaveFramesPath = Helper.GetArg("-save_frames_path");
+        if (cmlSaveFramesPath != null)
+        {
+            saveFramesOnDisk = true;
+            saveDatasetDir = cmlSaveFramesPath;
+        }
+
+        var cmlRepeatBatch = Helper.GetArg("-repeat_same_batch");
+        if (cmlRepeatBatch != null)
+        {
+            repeatSameBatch = int.Parse(cmlRepeatBatch);
+        }
+        var cmlPlaceCamera = Helper.GetArg("-place_camera_mode");
+        if (cmlPlaceCamera != null)
+        {
+            placeCameraMode = (PlaceCamerasMode)int.Parse(cmlPlaceCamera);
+        }
+        var cmlGetLabels = Helper.GetArg("-get_labels_mode");
+        if (cmlGetLabels != null)
+        {
+            getLabelsMode = (GetLabelsMode)int.Parse(cmlGetLabels);
+        }
+
         if (useBatchProvider)
         {
+            if (cmlNameDataset != null)
+            {
+                batchProvider.filePathDataset = nameDataset;
+            }
             batchProvider.InitBatchProvider();
             batchProvider.ActionReady += PrepareAndStartEpisode;
             batchProvider.RequestedExhaustedDataset += QuitApplication; 
             GameObject.Find("DATASETS").SetActive(false);
-
         }
         else
-        {
-
-            UnityEngine.Debug.Log("ATTENZIONE");
-            var cmlNameDataset = GetArg("-name_dataset");
-            if (!(cmlNameDataset == null))
-            {
-                nameDataset = cmlNameDataset;
-                UnityEngine.Debug.Log("New Dataset from command line: " + nameDataset);
-            }
- 
+        { 
             FillDataset();
             sendEnvParamsChannel.SendEnvInfoToPython((datasetList.Count).ToString());
         }
@@ -318,15 +331,20 @@ public class SequenceLearningTask : Agent
         {
             changeLightsEachTrial = tmpChange == 1;
         }
-        var tmpTrialType = (int)envParams.GetWithDefault("trialType", -1f);
-        if (tmpTrialType != -1)
+        var tmpPlaceCamera = (int)envParams.GetWithDefault("placeCamera", -1f);
+        if (tmpPlaceCamera != -1)
         {
-            trialType = (TrialType)tmpTrialType;
+            placeCameraMode = (PlaceCamerasMode)tmpPlaceCamera;
+        }
+        var tmpGetLabels = (int)envParams.GetWithDefault("getLabels", -1f);
+        if (tmpGetLabels != -1)
+        {
+            getLabelsMode = (GetLabelsMode)tmpGetLabels;
         }
 
-  
+
         // TEST EDELMAN
-        if ((this.trialType == TrialType.DET_TRIAL_EDELMAN_ORTHO_HOR || this.trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_HOR) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
+        if ((this.placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR || this.placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
         {
             string Str = "UNITY >> TrialType [TEST_EDELMAN] is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
@@ -334,7 +352,7 @@ public class SequenceLearningTask : Agent
             K = 1;
         }
         // TEST GOKER
-        if ((this.trialType == TrialType.DET_TRIAL_STATIC) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
+        if ((this.placeCameraMode == PlaceCamerasMode.FROM_CHANNEL) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
         {
             string Str = "UNITY >> TrialType [TEST_STATIC] is designed to work only for K = 1, numSt = 1, numFt = 1. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
@@ -352,15 +370,15 @@ public class SequenceLearningTask : Agent
         
 
 
-        if (trainCompType == TrainComparisonType.GROUP && this.trialType != TrialType.RND_TRIAL)
+        if (trainCompType == TrainComparisonType.GROUP && this.placeCameraMode != PlaceCamerasMode.RND)
         {
             string Str = "UNITY >> Comparison Type [GROUP] can only work with Trial Type [TRAIN].";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
-            this.trialType = TrialType.RND_TRIAL;
+            this.placeCameraMode = PlaceCamerasMode.RND;
             //Assert.IsTrue(false);
         }
 
-        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> TrialType: " + this.trialType.ToString());
+        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> TrialType: " + this.placeCameraMode.ToString());
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> trainComparisonType: " + trainCompType.ToString());
 
         GameObject tmpL = GameObject.Find("Lights").gameObject;
@@ -372,9 +390,27 @@ public class SequenceLearningTask : Agent
         if (saveFramesOnDisk)
         {
             AfterObservationCollected += SaveFrames;
-            var d = new DirectoryInfo(Application.dataPath + savingDatasetDir);
-            d.Delete(true);
-            d.Create();
+            
+            var d = new DirectoryInfo(Path.Combine(new string[] { Application.dataPath, "..",  saveDatasetDir }));
+            if (d.Exists)
+            {
+                d.Delete(true);
+            }
+            if (useBatchProvider)
+            {
+                foreach (var className in batchProvider.idxClassToName)
+                {
+                    new DirectoryInfo(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, className.Value })).Create();
+                }
+            }
+            else
+            {
+                foreach (var item in datasetList)
+                {
+                    new DirectoryInfo(Path.Combine(new string[] { Application.dataPath + "\\..\\", saveDatasetDir, item.classNumber.ToString() })).Create();
+
+                }
+            }
 
         }
 
@@ -397,6 +433,7 @@ public class SequenceLearningTask : Agent
 
     private void PrepareAndStartEpisode(Batch batch)
     {
+        indexBatch += 1;
         GameObject datasetObj = GameObject.Find("ActiveDataset");
         UnityEngine.Debug.Log("Prepare and start batched episode.");
         //GameObject datasetsStr = GameObject.Find(nameDataset);
@@ -404,27 +441,27 @@ public class SequenceLearningTask : Agent
         {
             datasetObj = new GameObject("ActiveDataset");
         }
-        //GameObject separator = GameObject.Find("Separator");
         foreach (var (gm, clsIdx) in datasetList)
         {
             Destroy(gm);
         }
         datasetList.Clear();
         int idxObjs = 0;
-        foreach (KeyValuePair<string, GameObject> entry in batch.path_to_gm)
+        foreach (KeyValuePair<string, GameObject> entry in batch.pathToGm)
         {
             var gm = entry.Value;
             gm.SetActive(true);
             gm.transform.position = new Vector3(0f, 0f, 0f);
             gm.transform.parent = datasetObj.transform;
 
-            datasetList.Add((gm, batch.path_to_class[entry.Key]));
+            datasetList.Add((gm, batch.pathToClassIdx[entry.Key]));
             datasetList[datasetList.Count - 1].gm.transform.position = new Vector3(15 * idxObjs, 0, 0);
 
             idxObjs += 1;
         }
+        Destroy(batch.batchContainer);
         setScene();
-        UnityEngine.Debug.Break();
+        //UnityEngine.Debug.Break();
     }
 
 #if UNITY_EDITOR
@@ -437,7 +474,7 @@ public class SequenceLearningTask : Agent
             //Gizmos.DrawSphere(bb.center, 0.1f); ;
             int index = 0;
             Gizmos.color = new Vector4(0, 0, 1F, 0.5F);
-            foreach ((ObjectCameras q,  ClassIdxDummy x) in training)
+            foreach ((ObjectCameraSet q,  ClassIdxDummy x) in training)
             {
                 foreach (SequenceCameras s in q.sequences)
                 {
@@ -451,7 +488,7 @@ public class SequenceLearningTask : Agent
 
             }
             Gizmos.color = new Vector4(0, 1F, 0F, 0.5F);
-            foreach ((ObjectCameras c, ClassIdxDummy x) in candidates)
+            foreach ((ObjectCameraSet c, ClassIdxDummy x) in candidates)
             {
                 foreach (SequenceCameras s in c.sequences)
                 {
@@ -642,7 +679,7 @@ public class SequenceLearningTask : Agent
 
         candidateObjIdx = trainingObjIdx;
 
-        if (Random.Range(0f, 1f) > simParams.probMatching)
+        if (Random.Range(0f, 1f) > simParams.probMatching && K > 1)
         {
             do
             {
@@ -785,16 +822,16 @@ public class SequenceLearningTask : Agent
         int sc = 0;
         int fsc = 0;
         Vector3 positionObj = new Vector3(0f, 0f, 0f);
-        if (trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_HOR)
+        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR)
         {
             positionObj = GetPositionAroundSphere(90, candidateCamRotation + candidateCamDegree, Vector3.up) * simParams.distance;
         }
 
-        if (trialType == TrialType.DET_TRIAL_EDELMAN_ORTHO_VER)
+        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_VER)
         {
             positionObj = GetPositionAroundSphere(90 + candidateCamRotation, (90 + candidateCamRotation) % 360 > 180 ? candidateCamDegree + 180 : candidateCamDegree, Vector3.up) * simParams.distance;
         }
-        if (trialType == TrialType.DET_TRIAL_EDELMAN_ORTHO_HOR)
+        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR)
         {
             int rotation_ortho = candidateCamRotation;
             if (candidateCamDegree > 90 && candidateCamDegree < 270)
@@ -806,7 +843,7 @@ public class SequenceLearningTask : Agent
 
         }
 
-        if (trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_VER)
+        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER)
         {
             positionObj = GetPositionAroundSphere(90 + candidateCamRotation + candidateCamDegree, (90 + candidateCamRotation + candidateCamDegree) % 360 > 180 ? 180 : 0, Vector3.up) * simParams.distance;
 
@@ -820,7 +857,7 @@ public class SequenceLearningTask : Agent
 
         for (int st = 0; st < numSt; st++)
         {
-            if (trialType == TrialType.DET_TRIAL_EDELMAN_ORTHO_HOR || trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_HOR)
+            if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR || placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR)
             {
                 if (st == 0)
                 {
@@ -840,7 +877,7 @@ public class SequenceLearningTask : Agent
                 }
             }
 
-            if (trialType == TrialType.DET_TRIAL_EDELMAN_ORTHO_VER || trialType == TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_VER)
+            if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_VER || placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER)
             {
                 if (st == 0)
                 {
@@ -866,10 +903,6 @@ public class SequenceLearningTask : Agent
             {
                 training[k].objCamera.sequences[st].cameraObjs[fst].transform.position = objPosT + positionsTcameras[fst];
                 training[k].objCamera.sequences[st].cameraObjs[fst].transform.LookAt(objToLookAtT);
-                //training[k].sequences[st].frames[fst].GetComponent<Camera>().cullingMask = 1 << (8 + trainingObjIdx);
-                //debugPointsTraining.Add(training[k].sequences[st].frames[fst].transform.position);
-                //trainingCameraPosRelativeToObj[indexTraining] = positionsTcameras[fst];
-                //indexTraining += 1;
                 cameraPositions.Add(training[k].objCamera.sequences[st].cameraObjs[fst].transform.position - objPosT);
 
             }
@@ -914,6 +947,16 @@ public class SequenceLearningTask : Agent
 
     }
 
+    private (int, int) GetSequentialIdx(int k)
+    {
+        if (k >= datasetList.Count)
+        {
+            (int t, int c) = (Random.Range(0, datasetList.Count), Random.Range(0, datasetList.Count));
+            return (t, c);
+        }
+        else
+            return (k, k);
+    }
     public void setScene()
     {
         if (changeLightsEachTrial)
@@ -945,48 +988,55 @@ public class SequenceLearningTask : Agent
 
         for (int k = 0; k < K; k++)
         {
-            int trainingObjIdx;
-            int candidateObjIdx;
-            if (trialType == TrialType.RND_TRIAL)
+            int trainingObjIdx = -1;
+            int candidateObjIdx = -1;
+            switch (getLabelsMode)
             {
-                (trainingObjIdx, candidateObjIdx) = GetObjIdxRandom();
-            }
-            else
-            {
-                (trainingObjIdx, candidateObjIdx) = GetObjIdxFromChannel();
+                case GetLabelsMode.RND:
+                    (trainingObjIdx, candidateObjIdx) = GetObjIdxRandom();
+                    break;
+                case GetLabelsMode.SEQUENTIAL:
+                    (trainingObjIdx, candidateObjIdx) = GetSequentialIdx(k);
+                    break;
+                case GetLabelsMode.FROM_CHANNEL:
+                    (trainingObjIdx, candidateObjIdx) = GetObjIdxFromChannel();
+                    break;
+                default:
+                    Assert.IsTrue(false);
+                    break;
             }
 
-            training[k].classIdx.classIdx = trainingObjIdx;
+            training[k].classIdx.classIdx = datasetList[trainingObjIdx].classNumber;
 
             if (numSc > 0)
             {
                 gizmoCandidateObjs.Add(datasetList[candidateObjIdx].gm);
                 indexSelectedObjects.Add(candidateObjIdx);
-                candidates[k].classIdx.classIdx = candidateObjIdx;
+                candidates[k].classIdx.classIdx = datasetList[candidateObjIdx].classNumber;
             }
             indexSelectedObjects.Add(trainingObjIdx);
 
             gizmoTrainingObj.Add(datasetList[trainingObjIdx].gm);
-            switch (trialType)
+            switch (placeCameraMode)
             {
-                case TrialType.RND_TRIAL:
+                case PlaceCamerasMode.RND:
                     SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
                     break;
-                case TrialType.DET_TRIAL_EDELMAN_ORTHO_HOR:
-                case TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_HOR:
-                case TrialType.DET_TRIAL_EDELMAN_SAME_AXIS_VER:
-                case TrialType.DET_TRIAL_EDELMAN_ORTHO_VER:
+                case PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR:
+                case PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR:
+                case PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER:
+                case PlaceCamerasMode.DET_EDELMAN_ORTHO_VER:
                     SetCameraPositionEdelman(k, trainingObjIdx, candidateObjIdx);
                     break;
-                case TrialType.DET_TRIAL_STATIC:
+                case PlaceCamerasMode.FROM_CHANNEL:
                     SetStaticCameraPositionFromPython(k, trainingObjIdx, candidateObjIdx);
                     break;
 
             }
 
-            numEpisodes += 1;
             this.RequestDecision();
         }
+        numEpisodes += 1;
     }
     public override void OnEpisodeBegin()
     {
@@ -1022,41 +1072,51 @@ public class SequenceLearningTask : Agent
     
     public void SaveFrames()
     {
-        foreach ((ObjectCameras objCamera, ClassIdxDummy classIdx) in training)
+        void SaveObjCameraSet(List<(ObjectCameraSet, ClassIdxDummy)> objCameraSet, string append)
         {
-            foreach (var sequence in objCamera.sequences)
+            int indexObj = 0;
+            foreach ((ObjectCameraSet objCamera, ClassIdxDummy classIdx) in objCameraSet)
             {
-                foreach (var cameraObj in sequence.cameraObjs)
+                int indexSeq = 0;
+                foreach (var sequence in objCamera.sequences)
                 {
-                    var camera = cameraObj.GetComponent<Camera>();
-                    var texture = CameraSensor.ObservationToTexture(camera, sizeCanvas, sizeCanvas);
-                    var compressed = texture.EncodeToPNG();
-                    
-                    //ByteArrayToFile("C:/prova.png", compressed);
-                    File.WriteAllBytes(Application.dataPath + savingDatasetDir + "//prova.png", compressed);
-                    //using (Image image = Image.FromStream(new MemoryStream(compressed)))
-                    //{
-                    //    image.Save("C://Users//valer//Desktop//prova.png", ImageFormat.Png);  // Or Png
-                    //}
+                    int indexCam = 0;
+                    foreach (var cameraObj in sequence.cameraObjs)
+                    {
+                        var camera = cameraObj.GetComponent<Camera>();
+                        var texture = CameraSensor.ObservationToTexture(camera, sizeCanvas, sizeCanvas);
+                        var compressed = texture.EncodeToPNG();
+
+                        File.WriteAllBytes(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, 
+                            useBatchProvider? batchProvider.idxClassToName[classIdx.classIdx]:classIdx.classIdx.ToString(),
+                            append + "B" + indexBatch + "_O" + indexObj + "_S" + indexSeq + "_C" + indexCam + "_r" + (batchRepeated - 1) + ".png" }), compressed);
+                        indexCam += 1;
+                        imgsSaved += 1;
+                    }
+                    indexSeq += 1;
                 }
+                indexObj += 1;
             }
         }
-    }
-    IEnumerator waiter()
-    {
 
-        //Wait for 4 seconds
-        yield return new WaitForSeconds(4);
-    }
+        SaveObjCameraSet(training, "t");
+        SaveObjCameraSet(candidates, "c");
 
-    public override void Heuristic(float[] actionsOut)
-    {
-        if (Input.GetKeyDown("space"))
+        string msg = System.DateTime.Now.ToString("HH:mm:ss") + " ";
+        if (indexBatch % 10 == 0 && (batchRepeated -1) == 0)
         {
-            UnityEngine.Debug.Log("SPACE");
-            OnEpisodeBegin();
+            double elps = stopWatchBatches.Elapsed.TotalSeconds;
+            msg += "10 Batches: " + elps + " sec, " + elps/((float)K * 10) + "sec x obj \n";
+            stopWatchBatches.Restart();
+        }
+        if (batchRepeated - 1 == 0)
+        {
+            msg += "Image Saved: " + imgsSaved + ", ObjSaved:" + (indexBatch + 1) * K + "/" + batchProvider.getSamplesCount();
+            UnityEngine.Debug.Log(msg);
+            Helper.FileLog(msg);
         }
     }
+
     public override void CollectObservations(VectorSensor sensor)
     {
 
@@ -1070,10 +1130,16 @@ public class SequenceLearningTask : Agent
         {
             sensor.AddObservation(pos);
         }
-        AfterObservationCollected();
+        if (AfterObservationCollected != null)
+        {
+            AfterObservationCollected();
+        }
     }
 
 
+    public override void Heuristic(float[] actionsOut)
+    {
+    }
 
     public override void OnActionReceived(float[] vectorAction)
     {
@@ -1082,7 +1148,8 @@ public class SequenceLearningTask : Agent
 
 }
 
-[ExecuteInEditMode]
+#if UNITY_EDITOR
+
 [CustomEditor(typeof(SequenceLearningTask))]
 public class SequenceMLtaskEditor : Editor
 {
@@ -1113,12 +1180,19 @@ public class SequenceMLtaskEditor : Editor
             slt.changeLightsEachTrial = EditorGUILayout.Toggle(slt.changeLightsEachTrial) == true;
             EditorGUILayout.EndHorizontal();
 
+
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent("Trial Type"), GUILayout.Width(120));
+            EditorGUILayout.LabelField(new GUIContent("Get Labels Mode"), GUILayout.Width(120));
             //slt.trialType = (SequenceLearningTask.TrialType)((int)(SequenceLearningTask.TrialType)EditorGUILayout.EnumPopup((SequenceLearningTask.TrialType)((int)(slt.trialType) << 1)) >> 1);
-            slt.trialType = (SequenceLearningTask.TrialType)EditorGUILayout.EnumPopup(slt.trialType, GUILayout.Width(150));
+            slt.getLabelsMode = (SequenceLearningTask.GetLabelsMode)EditorGUILayout.EnumPopup(slt.getLabelsMode, GUILayout.Width(150));
             EditorGUILayout.EndHorizontal();
-            if (slt.trialType == SequenceLearningTask.TrialType.RND_TRIAL)
+            EditorGUILayout.BeginHorizontal();
+
+            EditorGUILayout.LabelField(new GUIContent("Place Camera Mode"), GUILayout.Width(120));
+            //slt.trialType = (SequenceLearningTask.TrialType)((int)(SequenceLearningTask.TrialType)EditorGUILayout.EnumPopup((SequenceLearningTask.TrialType)((int)(slt.trialType) << 1)) >> 1);
+            slt.placeCameraMode = (SequenceLearningTask.PlaceCamerasMode)EditorGUILayout.EnumPopup(slt.placeCameraMode, GUILayout.Width(150));
+            EditorGUILayout.EndHorizontal();
+            if (slt.placeCameraMode == SequenceLearningTask.PlaceCamerasMode.RND)
             {
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(new GUIContent("Comparison Type"), GUILayout.Width(120));
@@ -1126,6 +1200,46 @@ public class SequenceMLtaskEditor : Editor
                 EditorGUILayout.EndHorizontal();
             }
 
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(new GUIContent("Save Frames"), GUILayout.Width(120));
+            slt.saveFramesOnDisk = EditorGUILayout.Toggle(slt.saveFramesOnDisk) == true;
+
+            if (slt.saveFramesOnDisk)
+            {;
+                //[Tooltip("Accepts combinations of datasets with + e.g. LeekSS+LeekSD")]
+                EditorGUILayout.LabelField(new GUIContent("Here: "), GUILayout.Width(35));
+                slt.saveDatasetDir = EditorGUILayout.TextField(slt.saveDatasetDir, GUILayout.Width(200));
+            }
+            EditorGUILayout.EndHorizontal();
+
+
+
+
+            EditorGUILayout.BeginHorizontal(); 
+            EditorGUILayout.LabelField(new GUIContent("Use BatchProvider"), GUILayout.Width(120));
+            slt.useBatchProvider = EditorGUILayout.Toggle(slt.useBatchProvider, GUILayout.Width(20)) == true;
+
+            if (slt.useBatchProvider)
+            {
+                slt.batchProvider = (BatchProvider)EditorGUILayout.ObjectField(slt.batchProvider, typeof(BatchProvider), true);
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch"), GUILayout.Width(120));
+                slt.repeatSameBatch = EditorGUILayout.IntField(slt.repeatSameBatch, GUILayout.Width(50));
+                if (slt.repeatSameBatch == -1)
+                {
+                    EditorGUILayout.LabelField(new GUIContent("Repeat Forever"), GUILayout.Width(120));
+
+                }
+                EditorGUILayout.EndHorizontal();
+
+            }
+            else
+            {
+                EditorGUILayout.EndHorizontal();
+            }
             if (!slt.useBatchProvider)
             {
                 EditorGUILayout.BeginHorizontal();
@@ -1134,43 +1248,7 @@ public class SequenceMLtaskEditor : Editor
                 slt.nameDataset = EditorGUILayout.TextField(slt.nameDataset, GUILayout.Width(200));
                 EditorGUILayout.EndHorizontal();
             }
-
-            EditorGUILayout.BeginHorizontal(); 
-            EditorGUILayout.LabelField(new GUIContent("Use BatchProvider"), GUILayout.Width(120));
-            slt.useBatchProvider = EditorGUILayout.Toggle(slt.useBatchProvider) == true;
-            EditorGUILayout.EndHorizontal();
-
-            if (slt.useBatchProvider)
-            {
-                slt.batchProvider = (BatchProvider)EditorGUILayout.ObjectField(slt.batchProvider, typeof(BatchProvider), true);
-
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch"), GUILayout.Width(150));
-                slt.repeatSameBatch = EditorGUILayout.IntField(slt.repeatSameBatch, GUILayout.Width(50));
-                if (slt.repeatSameBatch == -1)
-                {
-                EditorGUILayout.LabelField(new GUIContent("Repeat Forever"), GUILayout.Width(120));
-
-                }
-                EditorGUILayout.EndHorizontal();
-
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(new GUIContent("Save Frames"), GUILayout.Width(120));
-                slt.saveFramesOnDisk = EditorGUILayout.Toggle(slt.saveFramesOnDisk) == true;
-                EditorGUILayout.EndHorizontal();
-
-                if (slt.saveFramesOnDisk)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    //[Tooltip("Accepts combinations of datasets with + e.g. LeekSS+LeekSD")]
-                    EditorGUILayout.LabelField(new GUIContent("Saving Dir"), GUILayout.Width(120));
-                    slt.savingDatasetDir = EditorGUILayout.TextField(slt.savingDatasetDir, GUILayout.Width(200));
-                    EditorGUILayout.EndHorizontal();
-                }
-
-
-
-            }
         }
     }
 }
+#endif

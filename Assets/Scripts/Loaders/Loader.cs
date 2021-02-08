@@ -158,7 +158,7 @@ namespace AsImpL
             objLoadingProgress.fileName = fileName;
             objLoadingProgress.error = false;
             objLoadingProgress.message = "Loading " + fileName + "...";
-            Debug.LogFormat("Loading {0}\n  from: {1}...", objName, absolutePath);
+            //Debug.LogFormat("Loading {0}\n  from: {1}...", objName, absolutePath);
 
             yield return null;
 
@@ -211,15 +211,15 @@ namespace AsImpL
             yield return Build(absolutePath, objName, parentObj);
             loadStats.buildTime = Time.realtimeSinceStartup - lastTime;
             loadStats.totalTime = Time.realtimeSinceStartup - startTime;
-            Debug.Log("Done: " + objName
-                + "\n  Loaded in " + loadStats.totalTime + " seconds"
-                + "\n  Model data parsed in " + loadStats.modelParseTime + " seconds"
-                + "\n  Material data parsed in " + loadStats.materialsParseTime + " seconds"
-                + "\n  Game objects built in " + loadStats.buildTime + " seconds"
-                + "\n    textures: " + loadStats.buildStats.texturesTime + " seconds"
-                + "\n    materials: " + loadStats.buildStats.materialsTime + " seconds"
-                + "\n    objects: " + loadStats.buildStats.objectsTime + " seconds"
-                );
+            //Debug.Log("Done: " + objName
+            //    + "\n  Loaded in " + loadStats.totalTime + " seconds"
+            //    + "\n  Model data parsed in " + loadStats.modelParseTime + " seconds"
+            //    + "\n  Material data parsed in " + loadStats.materialsParseTime + " seconds"
+            //    + "\n  Game objects built in " + loadStats.buildTime + " seconds"
+            //    + "\n    textures: " + loadStats.buildStats.texturesTime + " seconds"
+            //    + "\n    materials: " + loadStats.buildStats.materialsTime + " seconds"
+            //    + "\n    objects: " + loadStats.buildStats.objectsTime + " seconds"
+            //    );
             totalProgress.singleProgress.Remove(objLoadingProgress);
             OnLoaded(loadedModels[absolutePath], absolutePath);
         }
@@ -256,6 +256,7 @@ namespace AsImpL
         /// <remarks>This is called by Load() method</remarks>
         protected IEnumerator Build(string absolutePath, string objName, Transform parentTransform)
         {
+            Debug.Log("LOADING " + absolutePath);
             float prevTime = Time.realtimeSinceStartup;
             if (materialData != null)
             {

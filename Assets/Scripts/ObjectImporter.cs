@@ -449,7 +449,7 @@ namespace AsImpL
         {
             if (ImportingComplete != null)
             {
-                UnityEngine.Debug.Log("IMPORT COMPLETED");
+                //UnityEngine.Debug.Log("IMPORT COMPLETED");
                 ImportingComplete();
             }
         }

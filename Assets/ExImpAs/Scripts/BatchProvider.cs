@@ -8,6 +8,21 @@ using AsImpL;
 
 public static class Helper
 {
+    public static string GetArg(string name)
+    {
+        UnityEngine.Debug.Log("I AM HERE READING YOUR COMMAND LINE");
+
+        var args = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length; i++)
+        {
+            UnityEngine.Debug.Log(args[i]);
+            if (args[i] == name && args.Length > i + 1)
+            {
+                return args[i + 1];
+            }
+        }
+        return null;
+    }
     public static void Shuffle<T>(this IList<T> ts)
     {
         var count = ts.Count;
@@ -20,15 +35,28 @@ public static class Helper
             ts[r] = tmp;
         }
     }
+
+    public static void FileLog(string debugMsg)
+    {
+        string path = Application.dataPath + "/debugLog.txt";
+        StreamWriter sw = new StreamWriter(path, true);
+        sw.WriteLine(debugMsg + "\n");
+        sw.Close();
+    }
+
 }
 
 public class Batch
 {
-    public Dictionary<string, int> path_to_class = new Dictionary<string, int>();
+    public Dictionary<string, int> pathToClassIdx = new Dictionary<string, int>();
     ObjectImporter batchImporter;
-    public Dictionary<string, GameObject> path_to_gm = new Dictionary<string, GameObject>();
+    public Dictionary<string, GameObject> pathToGm = new Dictionary<string, GameObject>();
     public bool ready = false;
     public event Action<Batch> BatchImportComplete;
+    public GameObject batchContainer; 
+    
+    
+
     protected virtual void OnBatchImportComplete()
     {
         ready = true;
@@ -37,15 +65,22 @@ public class Batch
             BatchImportComplete(this);
         }
     }
+
+    public void OnModelImported(GameObject gm, string path)
+    {
+        DatasetUtils.AdjustObject(gm);
+    }
     public Batch(List<(string path, int classIdx)> samples, ImportOptions importOptions, GameObject gm)
     {
+        batchContainer = new GameObject("Batch");
         batchImporter = gm.AddComponent<ObjectImporter>();
         batchImporter.CreatedModel += AddGameObject;
         batchImporter.ImportingComplete += OnBatchImportComplete;
+        batchImporter.ImportedModel += OnModelImported;
         int index = 0;
         foreach (var v in samples)
         {
-            batchImporter.ImportModelAsync("objC" + v.classIdx, v.Item1, null, importOptions);
+            batchImporter.ImportModelAsync("objC" + v.classIdx, v.Item1, batchContainer.transform, importOptions);
             index += 1;
         }
     }
@@ -53,8 +88,8 @@ public class Batch
     // This is called when the object is created, not when it has finished loading
     protected virtual void AddGameObject(GameObject obj, string absolutePath)
     {
-        path_to_class.Add(absolutePath, Int32.Parse(obj.name.Split('C')[1]));
-        path_to_gm.Add(absolutePath, obj);
+        pathToClassIdx.Add(absolutePath, Int32.Parse(obj.name.Split('C')[1]));
+        pathToGm.Add(absolutePath, obj);
     }
 }
 
@@ -66,19 +101,17 @@ public class BatchProvider : MonoBehaviour
     int counterLoadingBatches = 0;
 
     [SerializeField]
-    private string filePathDataset = "ShapeNetTry";
+    public string filePathDataset = "ShapeNetTry";
 
     [SerializeField]
     private ImportOptions importOptions = new ImportOptions();
 
-    [SerializeField]
-    private PathSettings pathSettings;
-
     public bool shuffleData = true;
 
     List<(string path, int classIdx)> samples = new List<(string path, int classIdx)>();
-    List<string> classNames = new List<string>();
-    int indexDataset = 0;
+    public Dictionary<int, string> idxClassToName = new Dictionary<int, string>();
+    [HideInInspector]
+    public int indexObjDataset = 0;
 
     public int batchSize = 6; // Batch size of -1 indicates to load all the dataset
     bool waitingForReady = false;
@@ -87,32 +120,52 @@ public class BatchProvider : MonoBehaviour
 
     public event Action RequestedExhaustedDataset;
 
-    public int batchToHaveReady = 3;
-    private bool isInit = false; 
+    public int batchesToHaveReady = 3;
+    private bool isInit = false;
 
+    public int getSamplesCount()
+    {
+        return samples.Count;
+    }
     private void Start()
     {
     }
 
     public void InitBatchProvider()
     {
-        filePathDataset = pathSettings.RootPath + filePathDataset;
+        filePathDataset = Path.Combine(new string[] { Application.dataPath, "..", filePathDataset });
 
         ready = new Queue<Batch>();
 
         // Look in the dataset to create a DatasetList
-        int class_idx = 0;
+        int classIdx = 0;
         var datasetDir = new DirectoryInfo(filePathDataset);
         foreach (var classdir in datasetDir.GetDirectories())
         {
-            classNames.Add(classdir.Name);
+            idxClassToName[classIdx] = classdir.Name;
             foreach (var obj in classdir.GetDirectories())
             {
-                samples.Add((obj.FullName + "/models/model_normalized.obj", class_idx));
+                samples.Add((obj.FullName + "/models/model_normalized.obj", classIdx));
             }
-            class_idx += 1;
-
+            classIdx += 1;
         }
+
+        var cmlShuffle = Helper.GetArg("-shuffle_data");
+        if (cmlShuffle != null)
+        {
+            shuffleData = int.Parse(cmlShuffle) == 1;
+        }
+        var cmlBatchSize = Helper.GetArg("-batch_size");
+        if (cmlBatchSize != null)
+        {
+            batchSize = int.Parse(cmlBatchSize);
+        }
+        var cmlBatchesReady = Helper.GetArg("-batches_ready");
+        if (cmlBatchesReady != null)
+        {
+            batchesToHaveReady = int.Parse(cmlBatchesReady);
+        }
+
         if (shuffleData)
         {
             Helper.Shuffle(samples);
@@ -120,8 +173,9 @@ public class BatchProvider : MonoBehaviour
         if (batchSize == -1)
         {
             batchSize = samples.Count;
+            batchesToHaveReady = 1;
         }
-        for (int i = 0; i < batchToHaveReady; i++)
+        for (int i = 0; i < batchesToHaveReady; i++)
         {
             AddBatch();
         }
@@ -135,14 +189,14 @@ public class BatchProvider : MonoBehaviour
     }
     private bool AddBatch()
     {
-        if (indexDataset >= samples.Count)
+        if (indexObjDataset >= samples.Count)
         {
             Debug.Log("Dataset Exhausted");
-            
+
             return false;
         }
-        var batch = new Batch(samples.GetRange(indexDataset, Mathf.Min(batchSize, samples.Count - indexDataset )), importOptions, gameObject);
-        indexDataset = Mathf.Min(samples.Count, indexDataset + batchSize); 
+        var batch = new Batch(samples.GetRange(indexObjDataset, Mathf.Min(batchSize, samples.Count - indexObjDataset)), importOptions, gameObject);
+        indexObjDataset = Mathf.Min(samples.Count, indexObjDataset + batchSize);
         if (batch.ready)
         {
             ready.Enqueue(batch);
@@ -152,7 +206,7 @@ public class BatchProvider : MonoBehaviour
             counterLoadingBatches += 1;
             batch.BatchImportComplete += SetBatchReady;
         }
-        return true; 
+        return true;
     }
 
 
@@ -180,9 +234,9 @@ public class BatchProvider : MonoBehaviour
         }
 
         Debug.Log("Waiting for loading batch");
-         waitingForReady = true;
-         yield return new WaitUntil(() => ready.Count > 0);
-         waitingForReady = false;
+        waitingForReady = true;
+        yield return new WaitUntil(() => ready.Count > 0);
+        waitingForReady = false;
         AddBatch();
         ActionReady(ready.Dequeue());
 
@@ -190,7 +244,7 @@ public class BatchProvider : MonoBehaviour
 
     private void printInfo()
     {
-        string tmpInfo = "Loading: " + counterLoadingBatches + "; Ready: " + ready.Count + ";  ImgsUsed: " + indexDataset + "; ImgsTot: " + samples.Count;
+        string tmpInfo = "Loading: " + counterLoadingBatches + "; Ready: " + ready.Count + ";  ObjsUsed: " + indexObjDataset + "; ObjsTot: " + samples.Count;
         if (tmpInfo != info)
         {
             info = tmpInfo;
@@ -198,12 +252,12 @@ public class BatchProvider : MonoBehaviour
         }
 
     }
- 
+
 
     private void Update()
     {
         if (isInit)
-             printInfo();
+            printInfo();
 
         if (Input.GetKeyDown("space"))
         {
