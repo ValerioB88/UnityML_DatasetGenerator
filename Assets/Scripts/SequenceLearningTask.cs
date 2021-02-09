@@ -468,7 +468,7 @@ public class SequenceLearningTask : Agent
         }
         Destroy(batch.batchContainer);
         setScene();
-        //UnityEngine.Debug.Break();
+        UnityEngine.Debug.Break();
     }
 
 #if UNITY_EDITOR

@@ -368,9 +368,21 @@ namespace AsImpL
             objectBuilder.StartBuildObjectAsync(dataSet, newObj);
             while (objectBuilder.BuildObjectAsync(ref info))
             {
-                objLoadingProgress.message = "Building scene objects... " + (info.objectsLoaded + info.groupsLoaded) + "/" + (dataSet.objectList.Count + info.numGroups);
-                objLoadingProgress.percentage = initProgress + BUILD_PHASE_PERC * (info.objectsLoaded / dataSet.objectList.Count + (float)info.groupsLoaded / info.numGroups);
-                yield return null;
+                if (info.numGroups>100)
+                {
+                    Debug.Log(info.numGroups);
+
+                }
+                break;
+                //if (info.groupsLoaded % 100 == 0)
+                //{
+                //    objLoadingProgress.message = "Building scene objects... " + (info.objectsLoaded + info.groupsLoaded) + "/" + (dataSet.objectList.Count + info.numGroups);
+
+                //    objLoadingProgress.percentage = initProgress + BUILD_PHASE_PERC * (info.objectsLoaded / dataSet.objectList.Count + (float)info.groupsLoaded / info.numGroups);
+                //    UnityEngine.Debug.Log(objLoadingProgress.percentage);
+                //    Debug.Log(objLoadingProgress.message);
+                //}
+                //yield return null;
             }
             objLoadingProgress.percentage = 100.0f;
             loadedModels[absolutePath] = newObj;

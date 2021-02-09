@@ -337,6 +337,7 @@ namespace AsImpL
                 buildStatus.meshPartIdx = 0;
                 buildStatus.totFaceIdxCount = 0;
                 buildStatus.numGroups = Mathf.Max(1, objData.faceGroups.Count);
+
             }
 
             bool splitLargeMeshes = true;
@@ -353,6 +354,11 @@ namespace AsImpL
             bool splitGrp = false;
 
             DataSet.FaceGroupData grp = new DataSet.FaceGroupData();
+            //if (buildStatus.grpIdx % 50 != 0 && buildStatus.grpIdx < objData.faceGroups.Count - 1)
+            //{
+            //    buildStatus.grpIdx += 1;
+            //    return true;
+            //}
             grp.name = objData.faceGroups[buildStatus.grpIdx].name;
             grp.materialName = objData.faceGroups[buildStatus.grpIdx].materialName;
 

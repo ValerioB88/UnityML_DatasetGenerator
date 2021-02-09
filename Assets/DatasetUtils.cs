@@ -33,7 +33,7 @@ public class DatasetUtils : MonoBehaviour
             newChild = new GameObject(gm.name);
             newChild.transform.position = gm.transform.position;
 
-            for (int i = gm.transform.childCount - 1; i>= 0; i--)
+            for (int i = gm.transform.childCount - 1; i >= 0; i--)
             {
                 gm.transform.GetChild(i).parent = newChild.transform;
             }
@@ -42,75 +42,92 @@ public class DatasetUtils : MonoBehaviour
         }
         ScaleAndMovePivotObj(gm);
     }
-    static void ScaleAndMovePivotObj(GameObject gm)
+
+    static void SelectSubsample<T>(IList<T> items, int k)
     {
-        // Assume the hierarchy is gm -> Obj1 (change the position) -> MeshA, MeshB etc. (with renderer)
-        Bounds bb = new Bounds();
-        int children = gm.transform.GetChild(0).transform.childCount;
-        //Debug.Log("CHILDREN: " + children);
-        for (int i = 0; i < children; i++)
+        var rand = new System.Random();
+        var selected = new List<T>();
+        double needed = k;
+        double available = items.Count;
+        while (selected.Count < k)
         {
-            var obj = gm.transform.GetChild(0).transform.GetChild(i);
-            //Debug.Log(obj.name);
-            if (i == 0)
+            if (rand.NextDouble() < needed / (float)available)
             {
-                bb = obj.GetComponent<Renderer>().bounds;
+                selected.Add(items[(int)(available - 1)]);
+                needed--;
             }
-            else
-            {
-                bb.Encapsulate(obj.GetComponent<Renderer>().bounds);
-            }
+            available--;
         }
-        var center = bb.center;
-        var size = bb.size;
-        //Debug.Log("HERE: " + (gm.transform.GetChild(0).transform.position - center));
-        gm.transform.GetChild(0).transform.position += (gm.transform.GetChild(0).transform.position - center);
-
-        float maxSize = 3f;
-        gm.transform.localScale = gm.transform.localScale / (Mathf.Max(Mathf.Max(size.x, size.y), size.z) / maxSize);
     }
+        static void ScaleAndMovePivotObj(GameObject gm)
+        {
+            // Assume the hierarchy is gm -> Obj1 (change the position) -> MeshA, MeshB etc. (with renderer)
+            Bounds bb = new Bounds();
+            int children = gm.transform.GetChild(0).transform.childCount;
+            //Debug.Log("CHILDREN: " + children);
+            for (int i = 0; i < children; i++)
+            {
+                var obj = gm.transform.GetChild(0).transform.GetChild(i);
+                //Debug.Log(obj.name);
+                if (i == 0)
+                {
+                    bb = obj.GetComponent<Renderer>().bounds;
+                }
+                else
+                {
+                    bb.Encapsulate(obj.GetComponent<Renderer>().bounds);
+                }
+            }
+            var center = bb.center;
+            var size = bb.size;
+            //Debug.Log("HERE: " + (gm.transform.GetChild(0).transform.position - center));
+            gm.transform.GetChild(0).transform.position += (gm.transform.GetChild(0).transform.position - center);
 
-}
+            float maxSize = 3f;
+            gm.transform.localScale = gm.transform.localScale / (Mathf.Max(Mathf.Max(size.x, size.y), size.z) / maxSize);
+        }
+
+    }
 
 
 #if UNITY_EDITOR
-[ExecuteInEditMode]
-[CustomEditor(typeof(DatasetUtils))]
-public class DatasetUtilsEditor : Editor
-{
-    // Start is called before the first frame update
-
-    [CanEditMultipleObjects]
-    public Object datasetToAdjust;
-
-    public override void OnInspectorGUI()
+    [ExecuteInEditMode]
+    [CustomEditor(typeof(DatasetUtils))]
+    public class DatasetUtilsEditor : Editor
     {
-        if (!Application.isPlaying)
+        // Start is called before the first frame update
+
+        [CanEditMultipleObjects]
+        public Object datasetToAdjust;
+
+        public override void OnInspectorGUI()
         {
-            EditorGUILayout.BeginHorizontal();
-
-            datasetToAdjust = EditorGUILayout.ObjectField(datasetToAdjust, typeof(Object), true);
-
-            if (GUILayout.Button("Adjust Dataset"))
+            if (!Application.isPlaying)
             {
-                GameObject adjusted = (GameObject)GameObject.Instantiate(datasetToAdjust, GameObject.Find(datasetToAdjust.name).transform.parent);
-                adjusted.name = datasetToAdjust.name + "ADJ";
-                adjusted.transform.localPosition = new Vector3(0f, 0f, 0f);
-                List<GameObject> Children = new List<GameObject>(); ;
-                foreach (Transform child in adjusted.transform)
-                {
-                    Children.Add(child.gameObject);
-                }
-                foreach (var child in Children)
-                {
-                    DatasetUtils.AdjustObject(child.gameObject);
-                }
-                GameObject.Find(datasetToAdjust.name).SetActive(false);
+                EditorGUILayout.BeginHorizontal();
 
+                datasetToAdjust = EditorGUILayout.ObjectField(datasetToAdjust, typeof(Object), true);
+
+                if (GUILayout.Button("Adjust Dataset"))
+                {
+                    GameObject adjusted = (GameObject)GameObject.Instantiate(datasetToAdjust, GameObject.Find(datasetToAdjust.name).transform.parent);
+                    adjusted.name = datasetToAdjust.name + "ADJ";
+                    adjusted.transform.localPosition = new Vector3(0f, 0f, 0f);
+                    List<GameObject> Children = new List<GameObject>(); ;
+                    foreach (Transform child in adjusted.transform)
+                    {
+                        Children.Add(child.gameObject);
+                    }
+                    foreach (var child in Children)
+                    {
+                        DatasetUtils.AdjustObject(child.gameObject);
+                    }
+                    GameObject.Find(datasetToAdjust.name).SetActive(false);
+
+                }
+                EditorGUILayout.EndHorizontal();
             }
-            EditorGUILayout.EndHorizontal();
         }
     }
-}
 
 #endif

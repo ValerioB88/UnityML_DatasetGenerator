@@ -69,6 +69,7 @@ public class Batch
     public void OnModelImported(GameObject gm, string path)
     {
         DatasetUtils.AdjustObject(gm);
+        gm.name += "_ADJ";
     }
     public Batch(List<(string path, int classIdx)> samples, ImportOptions importOptions, GameObject gm)
     {
@@ -80,7 +81,7 @@ public class Batch
         int index = 0;
         foreach (var v in samples)
         {
-            batchImporter.ImportModelAsync("objC" + v.classIdx, v.Item1, batchContainer.transform, importOptions);
+            batchImporter.ImportModelAsync(v.path.Split(new string[] { "ShapeNetLimited" }, StringSplitOptions.None)[1].Split(new string[] { "model" }, StringSplitOptions.None)[0] + "objC" + v.classIdx, v.Item1, batchContainer.transform, importOptions);
             index += 1;
         }
     }
@@ -88,7 +89,7 @@ public class Batch
     // This is called when the object is created, not when it has finished loading
     protected virtual void AddGameObject(GameObject obj, string absolutePath)
     {
-        pathToClassIdx.Add(absolutePath, Int32.Parse(obj.name.Split('C')[1]));
+        pathToClassIdx.Add(absolutePath, Int32.Parse(obj.name.Split(new string[] { "objC" }, StringSplitOptions.None)[1]));
         pathToGm.Add(absolutePath, obj);
     }
 }
