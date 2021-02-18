@@ -8,6 +8,7 @@ namespace AsImpL
     /// </summary>
     public class ImportOptions
     {
+        public int skipIfMoreMeshesThan = 1000;
 
         public bool importMaterial = true; 
         public bool keepHidden = false; 

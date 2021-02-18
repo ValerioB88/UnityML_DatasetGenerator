@@ -92,6 +92,7 @@ namespace AsImpL
 
             if (string.IsNullOrEmpty(loadedText))
             {
+                objLoadingProgress.error = true;
                 // loading errors are already notified by LoadOrDownloadText()
                 if (loadedText == "")
                 {
@@ -634,7 +635,8 @@ namespace AsImpL
             {
                 if (notifyErrors)
                 {
-                    Debug.LogError(uwr.error);
+                    Debug.LogWarning("File " + url + " not found");
+                    //Debug.LogError(uwr.error);
                 }
             }
             else

@@ -197,6 +197,7 @@ namespace AsImpL
 
             if (objLoadingProgress.error)
             {
+                Debug.Log("Couldn't find path for " + absolutePath + ". Object skipped");
                 OnLoadFailed(absolutePath);
                 yield break;
             }
@@ -206,6 +207,8 @@ namespace AsImpL
             {
                 yield return LoadMaterialLibrary(absolutePath);
             }
+            
+            
             loadStats.materialsParseTime = Time.realtimeSinceStartup - lastTime;
             lastTime = Time.realtimeSinceStartup;
             yield return Build(absolutePath, objName, parentObj);
@@ -256,7 +259,7 @@ namespace AsImpL
         /// <remarks>This is called by Load() method</remarks>
         protected IEnumerator Build(string absolutePath, string objName, Transform parentTransform)
         {
-            Debug.Log("LOADING " + absolutePath);
+            //Debug.Log("LOADING " + absolutePath);
             float prevTime = Time.realtimeSinceStartup;
             if (materialData != null)
             {
@@ -366,23 +369,33 @@ namespace AsImpL
             ////newObj.transform.localScale = Vector3.one * Scaling;
             float initProgress = objLoadingProgress.percentage;
             objectBuilder.StartBuildObjectAsync(dataSet, newObj);
+            bool meshShown = false;
             while (objectBuilder.BuildObjectAsync(ref info))
             {
-                if (info.numGroups>100)
+                if (info.numGroups> buildOptions.skipIfMoreMeshesThan)
                 {
-                    Debug.Log(info.numGroups);
-
+                    Debug.Log("SKIPPED because it contained more than " + buildOptions.skipIfMoreMeshesThan + "meshes ( "+  info.numGroups + ").");
+                    //OnLoadFailed(absolutePath); // FIX HERE
+                    yield break;
                 }
-                break;
-                //if (info.groupsLoaded % 100 == 0)
-                //{
-                //    objLoadingProgress.message = "Building scene objects... " + (info.objectsLoaded + info.groupsLoaded) + "/" + (dataSet.objectList.Count + info.numGroups);
+                else
+                {
+                    if (!meshShown)
+                    {
+                        Debug.Log("LOADING " + absolutePath + "; meshes: " + info.numGroups);
+                        meshShown = true;
+                    }
+                }
+              
+                if (info.groupsLoaded % 100 == 0)
+                {
+                    objLoadingProgress.message = "Building scene objects... " + (info.objectsLoaded + info.groupsLoaded) + "/" + (dataSet.objectList.Count + info.numGroups);
 
-                //    objLoadingProgress.percentage = initProgress + BUILD_PHASE_PERC * (info.objectsLoaded / dataSet.objectList.Count + (float)info.groupsLoaded / info.numGroups);
-                //    UnityEngine.Debug.Log(objLoadingProgress.percentage);
-                //    Debug.Log(objLoadingProgress.message);
-                //}
-                //yield return null;
+                    objLoadingProgress.percentage = initProgress + BUILD_PHASE_PERC * (info.objectsLoaded / dataSet.objectList.Count + (float)info.groupsLoaded / info.numGroups);
+                    //Debug.Log(objLoadingProgress.percentage);
+                    //Debug.Log(objLoadingProgress.message);
+                }
+                yield return null;
             }
             objLoadingProgress.percentage = 100.0f;
             loadedModels[absolutePath] = newObj;
