@@ -30,10 +30,7 @@ public class SequenceLearningTask : Agent
     public GameObject agent;
     GameObject info;
 
-    List<(GameObject gm, int classIdx, int objIdx)> datasetList = new List<(GameObject gm, int classIdx, int objIdx)>();
-
-    //List<int> candidateIndexSelectedObjects = new List<int>();
-    //List<int> trainingIndexSelectedObjects = new List<int>();
+    List<(GameObject gm, int classIdx, int objIdx)> batchDatasetList = new List<(GameObject gm, int classIdx, int objIdx)>();
 
     List<Vector3> cameraPositions = new List<Vector3>();
 
@@ -41,7 +38,7 @@ public class SequenceLearningTask : Agent
     public bool GizmoCamHistory = true;
     [HideInInspector]
     public bool GizmoCamMidpoint = true;
-
+    
     [HideInInspector]
     public bool changeLightsEachTrial = false;
     
@@ -120,17 +117,28 @@ public class SequenceLearningTask : Agent
 
     int numEpisodes = 0;
     EnvironmentParameters envParams;
-    public SimulationParameters simParams = new SimulationParameters();
-    
+
     [HideInInspector]
     public PlaceCamerasMode placeCameraMode = PlaceCamerasMode.RND;
+    [HideInInspector]
+    public int numGridPointAzi = 10;
+    [HideInInspector]
+    public int numGridPointIncl = 10;
+
     [HideInInspector]
     public GetLabelsMode getLabelsMode = GetLabelsMode.RND;
     [HideInInspector]
     public TrainComparisonType trainCompType = TrainComparisonType.ALL;
     Stopwatch stopWatchBatches = new Stopwatch();
 
-    public int seed = 3; 
+    [HideInInspector]
+    public List<float> aziGridPoints = new List<float>();
+    [HideInInspector]
+    public List<float> inclGridPoints = new List<float>();
+
+    public int seed = 3;
+    public SimulationParameters simParams = new SimulationParameters();
+
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
         obj.layer = newLayer;
@@ -187,7 +195,8 @@ public class SequenceLearningTask : Agent
         DET_EDELMAN_ORTHO_HOR,
         DET_EDELMAN_SAME_AXIS_VER,
         DET_EDELMAN_ORTHO_VER,
-        FROM_CHANNEL
+        FROM_CHANNEL,
+        REPEAT_SEQUENTIAL
     }
 
     public enum TrainComparisonType
@@ -226,8 +235,8 @@ public class SequenceLearningTask : Agent
                 newObj.name = obj.name;
                 newObj.transform.position = new Vector3(0f, 0f, 0f);
                 newObj.transform.parent = datasetObj.transform;
-                datasetList.Add((newObj.gameObject, totChildren, totChildren));
-                datasetList[datasetList.Count - 1].gm.transform.position = new Vector3(15 * totChildren, 0, 0);
+                batchDatasetList.Add((newObj.gameObject, totChildren, totChildren));
+                batchDatasetList[batchDatasetList.Count - 1].gm.transform.position = new Vector3(15 * totChildren, 0, 0);
                 totChildren += 1;
                 //mapNameToNum.Add(datasetList[i].name, i);
                 //SetLayerRecursively(datasetList[i], 8 + i);
@@ -319,10 +328,10 @@ public class SequenceLearningTask : Agent
             saveFramesOnDisk = true;
             saveDatasetDir = cmlSaveFramesPath;
         }
-        else
-        {
-            saveFramesOnDisk = false;
-        }
+        //else
+        //{
+        //    saveFramesOnDisk = false;
+        //}
 
         var cmlRepeatBatch = Helper.GetArg("-repeat_same_batch");
         if (cmlRepeatBatch != null)
@@ -333,6 +342,20 @@ public class SequenceLearningTask : Agent
         if (cmlPlaceCamera != null)
         {
             placeCameraMode = (PlaceCamerasMode)int.Parse(cmlPlaceCamera);
+            if (placeCameraMode == PlaceCamerasMode.REPEAT_SEQUENTIAL)
+            {
+                var cmlAziGridPoints = Helper.GetArg("-azi_n");
+                if (cmlAziGridPoints != null)
+                {
+                    numGridPointAzi = int.Parse(cmlAziGridPoints);
+                }
+                var cmlInclGridPoints = Helper.GetArg("-incl_n");
+                if (cmlInclGridPoints != null)
+                {
+                    numGridPointIncl = int.Parse(cmlInclGridPoints);
+                }
+                repeatSameBatch = numGridPointAzi * numGridPointIncl;
+            }
         }
         var cmlGetLabels = Helper.GetArg("-get_labels_mode");
         if (cmlGetLabels != null)
@@ -360,13 +383,13 @@ public class SequenceLearningTask : Agent
             batchProvider.InitBatchProvider();
             batchProvider.ActionReady += PrepareAndStartEpisode;
             batchProvider.RequestedExhaustedDataset += QuitApplication;
-            sendEnvParamsChannel.SendEnvInfoToPython((batchProvider.NumObjects).ToString());
+            sendEnvParamsChannel.SendEnvInfoToPython((batchProvider.batchSize).ToString());  // this is not totally accurate, but it's what needed most of the time
             GameObject.Find("DATASETS").SetActive(false);
         }
         else
         { 
             FillDataset();
-            sendEnvParamsChannel.SendEnvInfoToPython((datasetList.Count).ToString());
+            sendEnvParamsChannel.SendEnvInfoToPython((batchDatasetList.Count).ToString());
         }
         envParams = Academy.Instance.EnvironmentParameters;
 
@@ -395,6 +418,20 @@ public class SequenceLearningTask : Agent
             sendDebugLogChannel.SendEnvInfoToPython(Str);
             placeCameraMode = PlaceCamerasMode.RND;
             //Assert.IsTrue(false);
+        }
+
+        
+        if (placeCameraMode == PlaceCamerasMode.REPEAT_SEQUENTIAL)
+        {
+            for (int i = 0; i < numGridPointAzi; i++)
+            {
+                for (int j = 0; j < numGridPointIncl; j++)
+                {
+                    aziGridPoints.Add(simParams.minCenterPointAziTcameras + (simParams.maxCenterPointAziTcameras - simParams.minCenterPointAziTcameras) / numGridPointAzi * i);
+
+                    inclGridPoints.Add(simParams.minCenterPointInclTcameras + (simParams.maxCenterPointInclTcameras - simParams.minCenterPointInclTcameras) / numGridPointIncl * j);
+                }
+            }
         }
 
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> placeCameraMode: " + placeCameraMode.ToString());
@@ -428,7 +465,7 @@ public class SequenceLearningTask : Agent
                 }
                 else
                 {
-                    foreach (var item in datasetList)
+                    foreach (var item in batchDatasetList)
                     {
                         new DirectoryInfo(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, item.classIdx.ToString() })).Create();
 
@@ -461,12 +498,12 @@ public class SequenceLearningTask : Agent
         {
             datasetObj = new GameObject("ActiveDataset");
         }
-        foreach (var (gm, clsIdx, objIdx) in datasetList)
+        foreach (var (gm, clsIdx, objIdx) in batchDatasetList)
         {
             Destroy(gm);
         }
 
-        datasetList.Clear();
+        batchDatasetList.Clear();
         int idxObjs = 0;
         foreach (KeyValuePair<string, (GameObject gm, int classIdx, int objIdx)> entry in batch.pathToGm)
         {
@@ -475,14 +512,14 @@ public class SequenceLearningTask : Agent
             gm.transform.position = new Vector3(0f, 0f, 0f);
             gm.transform.parent = datasetObj.transform;
             var v = batch.pathToGm[entry.Key];
-            datasetList.Add((gm, entry.Value.classIdx, entry.Value.objIdx));
-            datasetList[datasetList.Count - 1].gm.transform.position = new Vector3(15 * idxObjs, 0, 0);
+            batchDatasetList.Add((gm, entry.Value.classIdx, entry.Value.objIdx));
+            batchDatasetList[batchDatasetList.Count - 1].gm.transform.position = new Vector3(15 * idxObjs, 0, 0);
 
             idxObjs += 1;
         }
         Destroy(batch.batchContainer);
         setScene();
-        UnityEngine.Debug.Break();
+        //UnityEngine.Debug.Break();
     }
 
 #if UNITY_EDITOR
@@ -613,6 +650,8 @@ public class SequenceLearningTask : Agent
 
     //public Transform Target;
 
+    [System.Serializable]
+
     public class SimulationParameters
     {
         public float distance = 4f;
@@ -691,7 +730,7 @@ public class SequenceLearningTask : Agent
 
     public (int idxTraining, int idxCandidate) GetObjIdxRandom()
     {
-        var trainingObjIdx = Random.Range(0, datasetList.Count);
+        var trainingObjIdx = Random.Range(0, batchDatasetList.Count);
         if (numSc == 0)
         {
             return (trainingObjIdx, -1);
@@ -700,29 +739,29 @@ public class SequenceLearningTask : Agent
 
         candidateObjIdx = trainingObjIdx;
 
-        if (Random.Range(0f, 1f) > simParams.probMatching && datasetList.Count > 1)
+        if (Random.Range(0f, 1f) > simParams.probMatching && batchDatasetList.Count > 1)
         {
             do
             {
                 switch (trainCompType)
                 {
                     case TrainComparisonType.ALL:
-                        candidateObjIdx = Random.Range(0, datasetList.Count);
+                        candidateObjIdx = Random.Range(0, batchDatasetList.Count);
                         break;
                     case TrainComparisonType.GROUP:
                         switch (nameDataset)
                         {
                             case var ss when nameDataset.Contains("ShapeNet"):
-                                var nameGroup = datasetList[trainingObjIdx].gm.name.Split('.')[0];
-                                List<int> allIndices = new List<int>(datasetList.Select((go, i) => new { GameObj = go, Index = i })
+                                var nameGroup = batchDatasetList[trainingObjIdx].gm.name.Split('.')[0];
+                                List<int> allIndices = new List<int>(batchDatasetList.Select((go, i) => new { GameObj = go, Index = i })
                                                                                  .Where(x => x.GameObj.gm.name.Split('.')[0] == nameGroup)
                                                                                  .Select(x => x.Index));
                                 candidateObjIdx = allIndices[Random.Range(0, allIndices.Count)];
                                 //UnityEngine.Debug.Log("TRAIN OBJ: " + datasetList[trainingObjIdx].name + " CAND OBJ: " + datasetList[candidateObjIdx].name);
                                 break;
                             case var ss when nameDataset.Contains("GokerCuboids"):
-                                var nameGroupC = datasetList[trainingObjIdx].gm.name.Split('_')[0];
-                                List<int> allIndicesC = new List<int>(datasetList.Select((go, i) => new { GameObj = go, Index = i })
+                                var nameGroupC = batchDatasetList[trainingObjIdx].gm.name.Split('_')[0];
+                                List<int> allIndicesC = new List<int>(batchDatasetList.Select((go, i) => new { GameObj = go, Index = i })
                                                                                  .Where(x => x.GameObj.gm.name.Split('_')[0] == nameGroupC)
                                                                                  .Select(x => x.Index));
                                 candidateObjIdx = allIndicesC[Random.Range(0, allIndicesC.Count)];
@@ -749,8 +788,8 @@ public class SequenceLearningTask : Agent
         Vector3 middlePointSequenceT;
         Vector3 middlePointSequenceC;
 
-        var objPosT = datasetList[trainingObjIdx].gm.transform.position;
-        var objToLookAtT = datasetList[trainingObjIdx].gm.transform;
+        var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
+        var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
 
 
         float azimuthCenterPointT = RandomAngle(simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
@@ -771,8 +810,8 @@ public class SequenceLearningTask : Agent
             float inclinationCenterPointC = RandomAngle(inclinationCenterPointT + simParams.minInclTCcameras,
                                                         inclinationCenterPointT + simParams.maxInclTCcameras,
                                                         simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
-            var objPosC = datasetList[candidateObjIdx].gm.transform.position;
-            var objToLookAtC = datasetList[candidateObjIdx].gm.transform;
+            var objPosC = batchDatasetList[candidateObjIdx].gm.transform.position;
+            var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
 
             var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * simParams.distance;
             gizmoMiddlePointsAreaC.Add(middlePointCarea + objPosC);
@@ -832,11 +871,11 @@ public class SequenceLearningTask : Agent
         candidateCamRotation = candidateCamRotation % 360;
         candidateCamDegree = candidateCamDegree % 360;
 
-        var objPosT = datasetList[trainingObjIdx].gm.transform.position;
-        var objToLookAtT = datasetList[trainingObjIdx].gm.transform;
+        var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
+        var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
 
-        var objPosC = datasetList[candidateObjIdx].gm.transform.position;
-        var objToLookAtC = datasetList[candidateObjIdx].gm.transform;
+        var objPosC = batchDatasetList[candidateObjIdx].gm.transform.position;
+        var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
 
         List<Vector3> positionsTcameras = new List<Vector3>();
 
@@ -930,6 +969,16 @@ public class SequenceLearningTask : Agent
         }
     }
 
+    public void SetRepeatedCameraSequence(int k, int trainingObjIdx, int candidateObjIdx)
+    {
+        var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
+        var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
+        var positionCamT = GetPositionAroundSphere(inclGridPoints[batchRepeated - 1], aziGridPoints[batchRepeated - 1], Vector3.up) * simParams.distance;
+        training[k].sequences[0].cameraObjs[0].transform.position = objPosT + positionCamT;
+        training[k].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtT, Vector3.up);
+        cameraPositions.Add(training[k].sequences[0].cameraObjs[0].transform.position - objPosT);
+
+    }
     public void SetStaticCameraPositionFromPython(int k, int trainingObjIdx, int candidateObjIdx)
     {
         //int candidateCamDegree = (int)envParams.GetWithDefault("degree", (numEpisodes - 1) * 10);
@@ -937,8 +986,8 @@ public class SequenceLearningTask : Agent
         {
             int trainingCamAzimuth = (int)envParams.GetWithDefault("azimuthT", (numEpisodes - 1) * 2);
             int trainingCamInclination = (int)envParams.GetWithDefault("inclinationT", (numEpisodes - 1) * 2);
-            var objPosT = datasetList[trainingObjIdx].gm.transform.position;
-            var objToLookAtT = datasetList[trainingObjIdx].gm.transform;
+            var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
+            var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
             var positionCamT = GetPositionAroundSphere(trainingCamInclination, trainingCamAzimuth, Vector3.up) * simParams.distance;
             training[0].sequences[0].cameraObjs[0].transform.position = objPosT + positionCamT;
             training[0].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtT, Vector3.up);
@@ -947,8 +996,8 @@ public class SequenceLearningTask : Agent
 
         if (numSc > 0)
         {
-            var objPosC = datasetList[candidateObjIdx].gm.transform.position;
-            var objToLookAtC = datasetList[candidateObjIdx].gm.transform;
+            var objPosC = batchDatasetList[candidateObjIdx].gm.transform.position;
+            var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
             int candidateCamInclination = (int)envParams.GetWithDefault("inclinationC", (numEpisodes - 1) * 10);
             int candidateCamAzimuth = (int)envParams.GetWithDefault("azimuthC", (numEpisodes - 1) * 10);
             var positionCamC = GetPositionAroundSphere(candidateCamInclination, candidateCamAzimuth, Vector3.up) * simParams.distance;
@@ -963,16 +1012,16 @@ public class SequenceLearningTask : Agent
     public (int t, int c) GetObjIdxFromChannel()
     {
         int trainingObjIdx = (int)envParams.GetWithDefault("objT", 0f);
-        int candidateObjIdx = (int)envParams.GetWithDefault("objC", 1f);
+        int candidateObjIdx = (int)envParams.GetWithDefault("objC", 0f);
         return (trainingObjIdx, candidateObjIdx);
 
     }
 
     private (int, int) GetSequentialIdx(int k)
     {
-        if (k >= datasetList.Count)
+        if (k >= batchDatasetList.Count)
         {
-            (int t, int c) = (Random.Range(0, datasetList.Count), Random.Range(0, datasetList.Count));
+            (int t, int c) = (Random.Range(0, batchDatasetList.Count), Random.Range(0, batchDatasetList.Count));
             return (t, c);
         }
         else
@@ -980,6 +1029,7 @@ public class SequenceLearningTask : Agent
     }
     public void setScene()
     {
+        //UnityEngine.Debug.Log("SET SCENE" + batchRepeated);
         if (changeLightsEachTrial)
         {
             for (int i = 0; i < lights.Count; i++)
@@ -1027,22 +1077,26 @@ public class SequenceLearningTask : Agent
                     break;
             }
 
-            training[k].classIdx = datasetList[trainingObjIdx].classIdx;
-            training[k].objIdx = datasetList[trainingObjIdx].objIdx;
+            training[k].classIdx = batchDatasetList[trainingObjIdx].classIdx;
+            training[k].objIdx = batchDatasetList[trainingObjIdx].objIdx;
             training[k].batchIdx = trainingObjIdx;
 
+            if (training[k].objIdx == 3)
+            {
+                int stop = 1;
+            }
 
             if (numSc > 0)
             {
-                gizmoCandidateObjs.Add(datasetList[candidateObjIdx].gm);
+                gizmoCandidateObjs.Add(batchDatasetList[candidateObjIdx].gm);
                 //candidateIndexSelectedObjects.Add(candidateObjIdx);
-                candidates[k].classIdx = datasetList[candidateObjIdx].classIdx;
-                candidates[k].objIdx = datasetList[candidateObjIdx].objIdx;
+                candidates[k].classIdx = batchDatasetList[candidateObjIdx].classIdx;
+                candidates[k].objIdx = batchDatasetList[candidateObjIdx].objIdx;
                 candidates[k].batchIdx = candidateObjIdx;
             }
             //trainingIndexSelectedObjects.Add(trainingObjIdx);
 
-            gizmoTrainingObj.Add(datasetList[trainingObjIdx].gm);
+            gizmoTrainingObj.Add(batchDatasetList[trainingObjIdx].gm);
             switch (placeCameraMode)
             {
                 case PlaceCamerasMode.RND:
@@ -1057,6 +1111,9 @@ public class SequenceLearningTask : Agent
                 case PlaceCamerasMode.FROM_CHANNEL:
                     SetStaticCameraPositionFromPython(k, trainingObjIdx, candidateObjIdx);
                     break;
+                case PlaceCamerasMode.REPEAT_SEQUENTIAL:
+                    SetRepeatedCameraSequence(k, trainingObjIdx, candidateObjIdx);
+                    break;
 
             }
 
@@ -1065,15 +1122,6 @@ public class SequenceLearningTask : Agent
         numEpisodes += 1;
     }
 
-    //public IEnumerator waitForBatch()
-    //{
-    //    yield return new WaitUntil(() => batchProvider.ready.Count > 0);
-    //    batchProvider.Refill();
-    //    PrepareAndStartEpisode(batchProvider.ready.Dequeue());
-
-
-
-    //}
     public override void OnEpisodeBegin()
     {
         if (useBatchProvider)
@@ -1095,10 +1143,11 @@ public class SequenceLearningTask : Agent
                 }
                 else
                 {
+                    batchRepeated = 1;
                     StartCoroutine(batchProvider.StartWhenReady());
                     //StartCoroutine(waitForBatch());
 
-                    batchRepeated = 1;
+                    
 
                 }
             }
@@ -1125,12 +1174,18 @@ public class SequenceLearningTask : Agent
                         var camera = cameraObj.GetComponent<Camera>();
                         var texture = CameraSensor.ObservationToTexture(camera, sizeCanvas, sizeCanvas);
                         var compressed = texture.EncodeToPNG();
-
+                        //string imageName = append + imgsSaved + "_O" + +objCamera.objIdx + "_B" + indexBatch + "_K" + idxCameraSet + "_S" + indexSeq + "_C" + indexCam + "_r" + (batchRepeated - 1);
+                        if (objCamera.objIdx == 3)
+                        {
+                            int stop = 1;
+                        }
+                        string imageName = "O" + objCamera.objIdx + "_I" + inclGridPoints[batchRepeated - 1] + "_A" + aziGridPoints[batchRepeated - 1];
                         File.WriteAllBytes(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, 
                             useBatchProvider? batchProvider.idxClassToName[objCamera.classIdx]:objCamera.classIdx.ToString(),
-                            append + imgsSaved + "_O" +  + objCamera.objIdx + "_B" + indexBatch + "_K" + idxCameraSet + "_S" + indexSeq + "_C" + indexCam + "_r" + (batchRepeated - 1) + ".png" }), compressed);
+                            imageName + ".png" }), compressed);
                         indexCam += 1;
                         imgsSaved += 1;
+
                     }
                     indexSeq += 1;
                 }
@@ -1145,7 +1200,7 @@ public class SequenceLearningTask : Agent
         if (indexBatch % 10 == 0 && (batchRepeated -1) == 0)  // Change to ... batchRepeated == RepeatSameBatch
         {
             double elps = stopWatchBatches.Elapsed.TotalSeconds;
-            msg += "10 Batches: " + elps + " sec, " + elps/((float)datasetList.Count * 10) + "sec x obj \n";
+            msg += "10 Batches: " + elps + " sec, " + elps/((float)batchDatasetList.Count * 10) + "sec x obj \n";
             stopWatchBatches.Restart();
         }
         if (batchRepeated - 1 == 0)
@@ -1158,7 +1213,6 @@ public class SequenceLearningTask : Agent
 
     public override void CollectObservations(VectorSensor sensor)
     {
-
         for (int i = 0; i < Mathf.Max(candidates.Count, training.Count); i++)
         {
             if (i < candidates.Count)
@@ -1208,7 +1262,7 @@ public class SequenceMLtaskEditor : Editor
     public override void OnInspectorGUI()
     {
         if (!Application.isPlaying)
-        {
+        {   
             base.OnInspectorGUI();
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Gizmo Camera History"), GUILayout.Width(180));
@@ -1246,6 +1300,27 @@ public class SequenceMLtaskEditor : Editor
                 slt.trainCompType = (SequenceLearningTask.TrainComparisonType)EditorGUILayout.EnumPopup(slt.trainCompType, GUILayout.Width(150));
                 EditorGUILayout.EndHorizontal();
             }
+            if (slt.placeCameraMode == SequenceLearningTask.PlaceCamerasMode.REPEAT_SEQUENTIAL)
+            {
+                
+                EditorGUILayout.LabelField(new GUIContent("Num Grid Points"), GUILayout.Width(120));
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField(new GUIContent("H: "), GUILayout.Width(30));
+                slt.numGridPointAzi = EditorGUILayout.IntField(slt.numGridPointAzi, GUILayout.Width(40));
+
+                EditorGUILayout.LabelField(new GUIContent("V: "), GUILayout.Width(30));
+                slt.numGridPointIncl = EditorGUILayout.IntField(slt.numGridPointIncl, GUILayout.Width(40));
+                GUIStyle s = new GUIStyle(EditorStyles.label);
+                s.normal.textColor = Color.red;
+                EditorGUILayout.EndHorizontal();
+                EditorGUI.indentLevel--;
+                GUILayout.Label("Remember to use numSt and numFt=1,\nand the rest=0.\nK should almost always be the same as BatchSize", s);
+                slt.repeatSameBatch = slt.numGridPointIncl * slt.numGridPointAzi;
+
+
+
+            }
 
 
             EditorGUILayout.BeginHorizontal();
@@ -1273,13 +1348,16 @@ public class SequenceMLtaskEditor : Editor
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch"), GUILayout.Width(120));
+                //EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch (HxV)"), GUILayout.Width(150));
                 slt.repeatSameBatch = EditorGUILayout.IntField(slt.repeatSameBatch, GUILayout.Width(50));
                 if (slt.repeatSameBatch == -1)
                 {
                     EditorGUILayout.LabelField(new GUIContent("Repeat Forever"), GUILayout.Width(120));
 
                 }
+                //EditorGUI.indentLevel--;
+
                 EditorGUILayout.EndHorizontal();
 
             }

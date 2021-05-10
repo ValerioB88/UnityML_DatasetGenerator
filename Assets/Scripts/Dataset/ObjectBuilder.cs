@@ -71,7 +71,12 @@ namespace AsImpL
                         Debug.LogWarning("No material library defined. Using a default material.");
                 }
                 Debug.Log(Shader.Find(shaderName));
-                currMaterials.Add("default", new Material(Shader.Find(shaderName)));
+                var mat = new Material(Shader.Find(shaderName));
+                mat.SetFloat("_Metallic", 0.8f);
+                mat.SetFloat("_Glossiness", 0.5f);
+                //mat.color = new Color(Random.Range(0, 1f), Random.Range(0, 1f), Random.Range(0, 1f));
+                currMaterials.Add("default", mat);
+                
             }
         }
 
@@ -664,6 +669,8 @@ namespace AsImpL
             }
             Material newMaterial = new Material(Shader.Find(shaderName)); // "Standard (Specular setup)"
             newMaterial.name = md.materialName;
+            //newMaterial.SetFloat("_Metallic", 0.8f);
+            //newMaterial.SetFloat("_Smothness", 0.2f);
 
             float shinLog = Mathf.Log(md.shininess, 2);
             // get the metallic value from the shininess

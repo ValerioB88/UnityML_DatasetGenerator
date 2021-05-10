@@ -20,7 +20,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
     public static int numFt = 4;
     public static int numFc = 1;
     public static int grayscale = 1;
-    public static int K = 2;
+    public static int numCameraSets = 2;
     public static int Q = 1; // always 1
     public static int sizeCanvas = 64;
 
@@ -47,7 +47,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         GameObject info = GameObject.Find("Info");
         childs = info.transform.childCount;
 
-        string infoTxt = "K:" + K.ToString() + "_St:" + numSt.ToString() + "_Sc:" + numSc.ToString() + "_Ft:" + numFt.ToString() + "_Fc:" + numFc.ToString() + "_SC:" + sizeCanvas.ToString() + "_g:" + grayscale.ToString();
+        string infoTxt = "K:" + numCameraSets.ToString() + "_St:" + numSt.ToString() + "_Sc:" + numSc.ToString() + "_Ft:" + numFt.ToString() + "_Fc:" + numFc.ToString() + "_SC:" + sizeCanvas.ToString() + "_g:" + grayscale.ToString();
         UnityEngine.Debug.Log("BUILDING INFO TXT " + infoTxt);
         info.transform.GetChild(0).name = infoTxt;
 
@@ -61,7 +61,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         int totIndexT = 0;
         int totIndexC = 0;
 
-        for (int k = 0; k < K; k++)
+        for (int k = 0; k < numCameraSets; k++)
         {
             GameObject candidateCamera = GameObject.Find("CandidateCamera"); // remember to take this out from the sensorlist
             for (int sc = 0; sc < numSc; sc++)
@@ -78,7 +78,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
         }
 
-        for (int k = 0; k < K; k++)
+        for (int k = 0; k < numCameraSets; k++)
         {
             GameObject trainingCamera = GameObject.Find("TrainingCamera"); // remember to take this out from the sensorlist
             for (int st = 0; st < numSt; st++)
@@ -95,8 +95,8 @@ class SequenceBuildSceneCLI : MonoBehaviour
         }
 
         //Add Cameras to Agent
-        Assert.IsTrue(candidatesCameras.Count == K * numFc * numSc);
-        Assert.IsTrue(trainingCameras.Count == K * numFt * numSt);
+        Assert.IsTrue(candidatesCameras.Count == numCameraSets * numFc * numSc);
+        Assert.IsTrue(trainingCameras.Count == numCameraSets * numFt * numSt);
 
 
         foreach (GameObject traingCam in trainingCameras)
@@ -123,7 +123,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
         // Includes labels, and N*K+K*Q vector3s
         //UnityEngine.Debug.Log((N * K + K * Q) + 3 * (N * K + K * Q));
         // If numSc is 0, then we only send 1 set of labels (the training ones), otherwise we send two (training and the paired one)
-        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = (K * (numSc > 0 ? 2 : 1)) + (numFt * numSt + numFc * numSc) * K * 3;
+        agent.GetComponent<BehaviorParameters>().BrainParameters.VectorObservationSize = (numCameraSets * (numSc > 0 ? 2 : 1)) + (numFt * numSt + numFc * numSc) * numCameraSets * 3;
 
 #if UNITY_EDITOR
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
@@ -133,14 +133,13 @@ class SequenceBuildSceneCLI : MonoBehaviour
     }
     static void ParseAndBuild()
     {
-        UnityEngine.Debug.Log("CIAO ZIO");
         numSt = int.Parse(Helper.GetArg("-nSt"));
         numSc = int.Parse(Helper.GetArg("-nSc"));
         numFt = int.Parse(Helper.GetArg("-nFt"));
         numFc = int.Parse(Helper.GetArg("-nFc"));
         grayscale = int.Parse(Helper.GetArg("-grayscale"));
 
-        K = int.Parse(Helper.GetArg("-k"));
+        numCameraSets = int.Parse(Helper.GetArg("-k"));
         sizeCanvas = int.Parse(Helper.GetArg("-size_canvas"));
         nameScene = Helper.GetArg("-name_scene");
         outputPath = Helper.GetArg("-output_path");
@@ -197,7 +196,7 @@ public class BuildSettingsEditor : Editor
     bool unsavedChanges = false;
     public Object source;
     public Object datasetToAdjust;
-
+    bool advancedCameraGrouping = false;
     GameObject infoDTA;
     void OnEnable()
     {
@@ -232,34 +231,41 @@ public class BuildSettingsEditor : Editor
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent("K"), GUILayout.Width(20));
+            EditorGUILayout.LabelField(new GUIContent("Camera sets"), GUILayout.Width(75));
             K = EditorGUILayout.IntSlider(K, 1, 30);
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent("numSt"), GUILayout.Width(60));
-            numSt = EditorGUILayout.IntSlider(numSt, 1, 5);
-            EditorGUILayout.EndHorizontal();
+            advancedCameraGrouping = EditorGUILayout.Foldout(advancedCameraGrouping, "Advanced Option for Cameras Grouping");
+            if (advancedCameraGrouping)
+                if (Selection.activeTransform)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(new GUIContent("numSt"), GUILayout.Width(60));
+                    numSt = EditorGUILayout.IntSlider(numSt, 1, 5);
+                    EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent("numSc"), GUILayout.Width(60));
-            numSc = EditorGUILayout.IntSlider(numSc, 0, 5);
-            EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(new GUIContent("numSc"), GUILayout.Width(60));
+                    numSc = EditorGUILayout.IntSlider(numSc, 0, 5);
+                    EditorGUILayout.EndHorizontal();
+                    if (numSt > 0)
+                    {
+                        EditorGUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(new GUIContent("numFt"), GUILayout.Width(60));
+                        numFt = EditorGUILayout.IntSlider(numFt, 1, 10);
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    if (numSc > 0)
+                    {
+                        EditorGUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(new GUIContent("numFc"), GUILayout.Width(60));
+                        numFc = EditorGUILayout.IntSlider(numFc, 1, 10);
+                        EditorGUILayout.EndHorizontal();
+                    }
 
-            if (numSt > 0)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(new GUIContent("numFt"), GUILayout.Width(60));
-                numFt = EditorGUILayout.IntSlider(numFt, 1, 10);
-                EditorGUILayout.EndHorizontal();
-            }
-            if (numSc > 0)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(new GUIContent("numFc"), GUILayout.Width(60));
-                numFc = EditorGUILayout.IntSlider(numFc, 1, 10);
-                EditorGUILayout.EndHorizontal();
-            }
+
+                }
+
 
 
             if (unsavedChanges)
@@ -281,7 +287,7 @@ public class BuildSettingsEditor : Editor
                 SequenceBuildSceneCLI.numFc = numFc;
                 SequenceBuildSceneCLI.numFt = numFt;
                 SequenceBuildSceneCLI.numSc = numSc;
-                SequenceBuildSceneCLI.K = K;
+                SequenceBuildSceneCLI.numCameraSets = K;
                 SequenceBuildSceneCLI.sizeCanvas = sizeCanvas;
                 SequenceBuildSceneCLI.grayscale = grayscale;
                 SequenceBuildSceneCLI.UpdateComponents();

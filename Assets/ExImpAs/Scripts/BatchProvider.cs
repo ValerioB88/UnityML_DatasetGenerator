@@ -245,7 +245,7 @@ public class Batch
             var v = datasetEnum.Current;
             tmpMapPathIdx[v.path] = (v.classIdx, datasetEnum.position);
 
-            var nameObj = v.path.Split(new string[] { "ShapeNet" }, StringSplitOptions.None)[1].Split(new string[] { "model" }, StringSplitOptions.None)[0] + "objC" + v.classIdx;
+            var nameObj = btp.idxClassToName[v.classIdx] + "_" + objectsLoading;
             batchImporter.ImportModelAsync(nameObj, v.path, batchContainer.transform, importOptions);
             return true;
         }
@@ -325,6 +325,11 @@ public class BatchProvider : MonoBehaviour
         {
             shuffleData = int.Parse(cmlShuffle) == 1;
         }
+        var cmlImportMat = Helper.GetArg("-import_material");
+        if (cmlImportMat != null)
+        {
+             importOptions.importMaterial = int.Parse(cmlImportMat) == 1;
+        }
         var cmlBatchSize = Helper.GetArg("-batch_size");
         if (cmlBatchSize != null)
         {
@@ -387,14 +392,17 @@ public class BatchProvider : MonoBehaviour
             }
             else
             {
+                idxClassToName[classIdx] = classdir.Name;
 
                 List<string> tmpCat = new List<string>();
                 foreach (var obj in classdir.GetDirectories())
                 {
+
                     tmpCat.Add(obj.FullName + "/models/model_normalized.obj");
                 }
                 tmpCat.Shuffle();
-                for (int i = 0; i < Mathf.Min(maxObjsPerClass, tmpCat.Count); i++)
+
+                for (int i = 0; i < Mathf.Min(maxObjsPerClass == -1? tmpCat.Count : maxObjsPerClass, tmpCat.Count); i++)
                 {
                     dataset.Add(tmpCat[i], classIdx);
                 }
