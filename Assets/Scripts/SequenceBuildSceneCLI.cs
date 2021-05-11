@@ -19,7 +19,7 @@ class SequenceBuildSceneCLI : MonoBehaviour
     public static int numSc = 1;
     public static int numFt = 4;
     public static int numFc = 1;
-    public static int grayscale = 1;
+    public static int grayscale = 0;
     public static int numCameraSets = 2;
     public static int Q = 1; // always 1
     public static int sizeCanvas = 64;
@@ -177,7 +177,6 @@ class SequenceBuildSceneCLI : MonoBehaviour
 
 #if UNITY_EDITOR
 
-[ExecuteInEditMode]
 [CustomEditor(typeof(SequenceBuildSceneCLI))]
 public class BuildSettingsEditor : Editor
 {
@@ -196,7 +195,7 @@ public class BuildSettingsEditor : Editor
     bool unsavedChanges = false;
     public Object source;
     public Object datasetToAdjust;
-    bool advancedCameraGrouping = false;
+    bool advancedCameraGrouping;
     GameObject infoDTA;
     void OnEnable()
     {
@@ -213,20 +212,52 @@ public class BuildSettingsEditor : Editor
         infoDTA = info.transform.GetChild(1).gameObject;
         string infoDTAstr = infoDTA.name;
         datasetToAdjust = GameObject.Find(infoDTAstr.Split(':')[1]);
+        UnityEngine.Debug.Log("CIAO");
+
+        if (!Application.isPlaying && (numCameraSets != SequenceBuildSceneCLI.numCameraSets || numSt != SequenceBuildSceneCLI.numSt || numFt != SequenceBuildSceneCLI.numFt 
+            || numFc != SequenceBuildSceneCLI.numFc || sizeCanvas != SequenceBuildSceneCLI.sizeCanvas || grayscale != SequenceBuildSceneCLI.grayscale))
+        {
+            UpdateSequenceBuild();
+        }
     }
 
+    public void UpdateSequenceBuild()
+    {
+        SequenceBuildSceneCLI.numSt = numSt;
+        SequenceBuildSceneCLI.numFc = numFc;
+        SequenceBuildSceneCLI.numFt = numFt;
+        SequenceBuildSceneCLI.numSc = numSc;
+        SequenceBuildSceneCLI.numCameraSets = numCameraSets;
+        SequenceBuildSceneCLI.sizeCanvas = sizeCanvas;
+        SequenceBuildSceneCLI.grayscale = grayscale;
+        SequenceBuildSceneCLI.UpdateComponents();
+
+    }
     public override void OnInspectorGUI()
     {
         if (!Application.isPlaying)
         {
-            base.OnInspectorGUI();
+            //base.OnInspectorGUI();
             int tmp; 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Size Canvas"), GUILayout.Width(80));
-            sizeCanvas = EditorGUILayout.IntSlider(sizeCanvas, 10, 250);
+            tmp = EditorGUILayout.IntField(sizeCanvas);
+            
+            if (tmp != sizeCanvas)
+            {
+                sizeCanvas = tmp;
+                unsavedChanges = true;
+            }
+
+            // Grayscale should be easy to suport, since the ML-agents camera senseo supports it. 
             // Grayscale works generally but not for BatchProvider. You need to convert the bytes to bitmap and convert manually to grayscale. It's a bit of a pain so not now.
-            EditorGUILayout.LabelField(new GUIContent("Grayscale"), GUILayout.Width(80));
-            grayscale = EditorGUILayout.Toggle(grayscale == 1) ? 1 : 0;
+            //EditorGUILayout.LabelField(new GUIContent("Grayscale"), GUILayout.Width(80));
+            //tmp = EditorGUILayout.Toggle(grayscale == 1) ? 1 : 0;
+            //if (tmp != grayscale)
+            //{
+            //    grayscale = tmp;
+            //    unsavedChanges = true;
+            //}
 
             EditorGUILayout.EndHorizontal();
 
@@ -291,20 +322,13 @@ public class BuildSettingsEditor : Editor
             {
                 GUIStyle s = new GUIStyle(EditorStyles.label);
                 s.normal.textColor = Color.red;
-                GUILayout.Label("Changed.", s);
+                GUILayout.Label("Changed. Click Regenerate.", s);
             }
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("REGENERATE"))
             {
-                SequenceBuildSceneCLI.numSt = numSt;
-                SequenceBuildSceneCLI.numFc = numFc;
-                SequenceBuildSceneCLI.numFt = numFt;
-                SequenceBuildSceneCLI.numSc = numSc;
-                SequenceBuildSceneCLI.numCameraSets = numCameraSets;
-                SequenceBuildSceneCLI.sizeCanvas = sizeCanvas;
-                SequenceBuildSceneCLI.grayscale = grayscale;
-                SequenceBuildSceneCLI.UpdateComponents();
+                UpdateSequenceBuild();
                 unsavedChanges = false;
             }
             EditorGUILayout.EndHorizontal();

@@ -37,7 +37,7 @@ public class SequenceLearningTask : Agent
     [HideInInspector]
     public bool GizmoCamHistory = true;
     [HideInInspector]
-    public bool GizmoCamMidpoint = true;
+    public bool GizmoAreaMidPoints = true;
     
     [HideInInspector]
     public bool changeLightsEachTrial = false;
@@ -137,7 +137,7 @@ public class SequenceLearningTask : Agent
     public List<float> inclGridPoints = new List<float>();
 
     public int seed = 3;
-    public SimulationParameters simParams = new SimulationParameters();
+    public CameraSphereParams simParams = new CameraSphereParams();
 
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
@@ -378,7 +378,7 @@ public class SequenceLearningTask : Agent
             batchProvider.InitBatchProvider();
             batchProvider.ActionReady += PrepareAndStartEpisode;
             batchProvider.RequestedExhaustedDataset += QuitApplication;
-            sendEnvParamsChannel.SendEnvInfoToPython((batchProvider.batchSize).ToString());  // this is not totally accurate, but it's what needed most of the time
+            sendEnvParamsChannel.SendEnvInfoToPython((numCameraSets).ToString());  // this is not totally accurate, but it's what needed most of the time
             GameObject.Find("DATASETS").SetActive(false);
         }
         else
@@ -407,7 +407,6 @@ public class SequenceLearningTask : Agent
             placeCameraMode = PlaceCamerasMode.RND;
             //Assert.IsTrue(false);
         }
-
         
         if (placeCameraMode == PlaceCamerasMode.REPEAT_SEQUENTIAL)
         {
@@ -590,7 +589,7 @@ public class SequenceLearningTask : Agent
 
 
             }
-            if (GizmoCamMidpoint)
+            if (GizmoAreaMidPoints)
             {
                 foreach (var mp in gizmoMiddlePointsAreaC)
                 {
@@ -640,11 +639,11 @@ public class SequenceLearningTask : Agent
 
     [System.Serializable]
 
-    public class SimulationParameters
+    public class CameraSphereParams
     {
         public float distance = 4f;
         // TRAINING
-        // THIS GOES FROM 0 to 180 (cover the whole sphere) (relative to the world)
+        // Min and Max for Training Cameras, from 0 to 180 to cover the whole sphere (relative to the world)
         public float minCenterPointInclTcameras = 30;
         public float maxCenterPointInclTcameras = 120;
 
@@ -653,7 +652,6 @@ public class SequenceLearningTask : Agent
         public float maxCenterPointAziTcameras = 360;
 
         // CANDIDATE 
-        // This is almost always 0-360
         public float minCenterPointInclCcameras = 30;
         public float maxCenterPointInclCcameras = 120;
 
@@ -661,13 +659,13 @@ public class SequenceLearningTask : Agent
         public float maxCenterPointAziCcameras = 360;
 
         // from 0 to 180 / 360, it's degree and direction of the area around the center point for training cameras.
-        public float areaInclTcameras = 1;
-        public float areaAziTcameras = 359;
+        public float areaInclTcameras = 0;
+        public float areaAziTcameras = 360;
 
-        public float areaInclCcameras = 1;
-        public float areaAziCcameras = 359;
+        public float areaInclCcameras = 0;
+        public float areaAziCcameras = 360;
 
-        // DISTANCE
+        // DISTANCE BETWEEN TRAINING AND CANDIDATE CAMREAS
         // This goes from -180 to +180 (where 0 is the position of the first training camera)
         // this + areaDegC is the maximum distance between the 2 centers
         public float minInclTCcameras = 0; public float maxInclTCcameras = 0;
@@ -830,8 +828,8 @@ public class SequenceLearningTask : Agent
             //UnityEngine.Debug.Log("DELTA: " + delta);
             azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
             inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
-            inclGridPoints.Add(inclinationSequence);
-            aziGridPoints.Add(azimuthSequence);
+            inclGridPoints.Add((int)inclinationSequence);
+            aziGridPoints.Add((int)azimuthSequence);
 
             middlePointSequenceT = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
             gizmoMiddlePointsSequenceT.Add(middlePointSequenceT + objPosT);
@@ -968,11 +966,7 @@ public class SequenceLearningTask : Agent
             training[k].objIdx = batchDatasetList[trainingObjIdx].objIdx;
             training[k].batchIdx = trainingObjIdx;
 
-            if (training[k].objIdx == 3)
-            {
-                int stop = 1;
-            }
-
+            
             if (numSc > 0)
             {
                 gizmoCandidateObjs.Add(batchDatasetList[candidateObjIdx].gm);
@@ -1010,7 +1004,6 @@ public class SequenceLearningTask : Agent
             if (numEpisodes == 0)
             {
                 StartCoroutine(batchProvider.StartWhenReady());
-                //StartCoroutine(waitForBatch());
                 batchRepeated += 1;
 
             }
@@ -1035,7 +1028,15 @@ public class SequenceLearningTask : Agent
         }
         else
         {
-            setScene();
+            if (batchRepeated < repeatSameBatch || repeatSameBatch == -1)
+            {
+                batchRepeated += 1;
+                setScene();
+            }
+            else 
+            {
+                QuitApplication();
+            }
         }
     }
     
@@ -1080,9 +1081,10 @@ public class SequenceLearningTask : Agent
             msg += "10 Batches: " + elps + " sec, " + elps/((float)batchDatasetList.Count * 10) + "sec x obj \n";
             stopWatchBatches.Restart();
         }
-        if (batchRepeated - 1 == 0)
+        
+        if (useBatchProvider && batchRepeated - 1 == 0)
         {
-            msg += "Image Saved: " + imgsSaved + ", ObjSaved:" + batchProvider.batchProvided * Mathf.Min(batchProvider.batchSize, numCameraSets) + "/" + batchProvider.TotObjects;
+            msg += "Image Saved: " + imgsSaved + ", ObjSaved:" + batchProvider.batchProvided * numCameraSets + "/" + batchProvider.TotObjects;
             UnityEngine.Debug.Log(msg);
             Helper.FileLog(msg, filename: "debugLog" + seed + ".txt");
         }
@@ -1139,7 +1141,7 @@ public class SequenceMLtaskEditor : Editor
     public override void OnInspectorGUI()
     {
         if (!Application.isPlaying)
-        {   
+        {
             base.OnInspectorGUI();
 
             //advancedCameraGrouping = EditorGUILayout.Foldout(advancedCameraGrouping, "Advanced Option for Cameras Grouping");
@@ -1148,10 +1150,10 @@ public class SequenceMLtaskEditor : Editor
             slt.GizmoCamHistory = EditorGUILayout.Toggle(slt.GizmoCamHistory) == true;
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent("Gizmo Midpoint History"), GUILayout.Width(180));
-            slt.GizmoCamMidpoint = EditorGUILayout.Toggle(slt.GizmoCamMidpoint) == true;
-            EditorGUILayout.EndHorizontal();
+            //EditorGUILayout.BeginHorizontal();
+            //EditorGUILayout.LabelField(new GUIContent("Gizmo Midpoint History"), GUILayout.Width(180));
+            //slt.GizmoAreaMidPoints = EditorGUILayout.Toggle(slt.GizmoAreaMidPoints) == true;
+            //EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
@@ -1170,8 +1172,21 @@ public class SequenceMLtaskEditor : Editor
 
             EditorGUILayout.LabelField(new GUIContent("Place Camera Mode"), GUILayout.Width(120));
             //slt.trialType = (SequenceLearningTask.TrialType)((int)(SequenceLearningTask.TrialType)EditorGUILayout.EnumPopup((SequenceLearningTask.TrialType)((int)(slt.trialType) << 1)) >> 1);
-            slt.placeCameraMode = (SequenceLearningTask.PlaceCamerasMode)EditorGUILayout.EnumPopup(slt.placeCameraMode, GUILayout.Width(150));
+            SequenceLearningTask.PlaceCamerasMode tmp = (SequenceLearningTask.PlaceCamerasMode)EditorGUILayout.EnumPopup(slt.placeCameraMode, GUILayout.Width(150));
             EditorGUILayout.EndHorizontal();
+            if (tmp != slt.placeCameraMode)
+            {
+                slt.placeCameraMode = tmp;
+                if (slt.placeCameraMode == SequenceLearningTask.PlaceCamerasMode.REPEAT_SEQUENTIAL)
+                {
+                    SequenceBuildSceneCLI.numFc = 0;
+                    SequenceBuildSceneCLI.numFt = 1;
+                    SequenceBuildSceneCLI.numSt = 1;
+                    SequenceBuildSceneCLI.numSc = 0;
+                    SequenceBuildSceneCLI.UpdateComponents();
+                }
+            }
+
             if (slt.placeCameraMode == SequenceLearningTask.PlaceCamerasMode.RND)
             {
                 EditorGUILayout.BeginHorizontal();
@@ -1181,7 +1196,7 @@ public class SequenceMLtaskEditor : Editor
             }
             if (slt.placeCameraMode == SequenceLearningTask.PlaceCamerasMode.REPEAT_SEQUENTIAL)
             {
-                
+
                 EditorGUILayout.LabelField(new GUIContent("Num Grid Points"), GUILayout.Width(120));
                 EditorGUILayout.BeginHorizontal();
                 EditorGUI.indentLevel++;
@@ -1190,17 +1205,34 @@ public class SequenceMLtaskEditor : Editor
 
                 EditorGUILayout.LabelField(new GUIContent("V: "), GUILayout.Width(30));
                 slt.numGridPointIncl = EditorGUILayout.IntField(slt.numGridPointIncl, GUILayout.Width(40));
-                GUIStyle s = new GUIStyle(EditorStyles.label);
-                s.normal.textColor = Color.red;
                 EditorGUILayout.EndHorizontal();
-                EditorGUI.indentLevel--;
-                GUILayout.Label("Remember to use numSt and numFt=1,\nand the rest=0.\nCamera Sets should almost always be the same as BatchSize", s);
+
+                if (SequenceBuildSceneCLI.numSt != 1 || SequenceBuildSceneCLI.numFt != 1 || SequenceBuildSceneCLI.numSc != 0 || SequenceBuildSceneCLI.numFc != 0)
+                {
+                    GUIStyle s = new GUIStyle(EditorStyles.label);
+                    s.normal.textColor = Color.red;
+                    EditorGUI.indentLevel--;
+
+                    GUILayout.Label("WATCH OUT! REPEAT SEQUENTIAL SELECTED!\nThis only works with default parameters!\nPlease set numSt=1, numFt=1, numSc=0, numFc=0\nand regenerate.", s);
+                }
                 slt.repeatSameBatch = slt.numGridPointIncl * slt.numGridPointAzi;
 
-
-
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch " + slt.repeatSameBatch + " times (HxV)"), GUILayout.Width(300));
+                EditorGUILayout.EndHorizontal();
             }
+            else
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch:", "Set to -1 to repeat just one batch forever"), GUILayout.Width(150));
+                slt.repeatSameBatch = EditorGUILayout.IntField(slt.repeatSameBatch, GUILayout.Width(50));
+                if (slt.repeatSameBatch == -1)
+                {
+                    EditorGUILayout.LabelField(new GUIContent("Repeat Forever"), GUILayout.Width(120));
 
+                }
+                EditorGUILayout.EndHorizontal();
+            }
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Save Frames"), GUILayout.Width(120));
@@ -1209,7 +1241,7 @@ public class SequenceMLtaskEditor : Editor
             if (slt.saveFramesOnDisk)
             {;
                 //[Tooltip("Accepts combinations of datasets with + e.g. LeekSS+LeekSD")]
-                EditorGUILayout.LabelField(new GUIContent("Here: "), GUILayout.Width(35));
+                EditorGUILayout.LabelField(new GUIContent("Here: "), GUILayout.Width(50));
                 slt.saveDatasetDir = EditorGUILayout.TextField(slt.saveDatasetDir, GUILayout.Width(200));
             }
             EditorGUILayout.EndHorizontal();
@@ -1226,24 +1258,12 @@ public class SequenceMLtaskEditor : Editor
                 slt.batchProvider = (BatchProvider)EditorGUILayout.ObjectField(slt.batchProvider, typeof(BatchProvider), true);
                 EditorGUILayout.EndHorizontal();
 
-                EditorGUILayout.BeginHorizontal();
-                //EditorGUI.indentLevel++;
-                EditorGUILayout.LabelField(new GUIContent("Repeat Same Batch (HxV)"), GUILayout.Width(150));
-                slt.repeatSameBatch = EditorGUILayout.IntField(slt.repeatSameBatch, GUILayout.Width(50));
-                if (slt.repeatSameBatch == -1)
-                {
-                    EditorGUILayout.LabelField(new GUIContent("Repeat Forever"), GUILayout.Width(120));
-
-                }
-                //EditorGUI.indentLevel--;
-
-                EditorGUILayout.EndHorizontal();
-
             }
             else
             {
                 EditorGUILayout.EndHorizontal();
             }
+
             if (!slt.useBatchProvider)
             {
                 EditorGUILayout.BeginHorizontal();
@@ -1251,6 +1271,24 @@ public class SequenceMLtaskEditor : Editor
                 EditorGUILayout.LabelField(new GUIContent("Dataset Name"), GUILayout.Width(120));
                 slt.nameDataset = EditorGUILayout.TextField(slt.nameDataset, GUILayout.Width(200));
                 EditorGUILayout.EndHorizontal();
+                if (GameObject.Find(slt.nameDataset) == null)
+                { 
+                    GUIStyle s = new GUIStyle(EditorStyles.label);
+                    s.normal.textColor = Color.red;
+                    EditorGUI.indentLevel--;
+                    GUILayout.Label("WATCH OUT! Dataset doesn't exist in /DATASETS", s);
+                }
+                else
+                {
+                    int numObjects = GameObject.Find(slt.nameDataset).transform.childCount;
+                    if (numObjects != SequenceBuildSceneCLI.numCameraSets)
+                    {
+                        GUIStyle s = new GUIStyle(EditorStyles.label);
+                        s.normal.textColor = Color.red;
+                        EditorGUI.indentLevel--;
+                        GUILayout.Label("WATCH OUT! \nSelected Dataset contains " + numObjects + " objects,\nbut Camera Sets =  " + SequenceBuildSceneCLI.numCameraSets + ".\nThey should match.", s);
+                    }
+                }
             }
         }
     }

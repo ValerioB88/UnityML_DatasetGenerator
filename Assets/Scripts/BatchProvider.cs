@@ -290,7 +290,7 @@ public class BatchProvider : MonoBehaviour
     [HideInInspector]
     public int startFromObjectIdx = 0;
 
-    public int batchSize; // Batch size of -1 indicates to load all the dataset
+    //public int batchSize; // Batch size of -1 indicates to load all the dataset
     bool waitingForReady = false;
     string info = "";
     public event Action<Batch> ActionReady;
@@ -311,6 +311,8 @@ public class BatchProvider : MonoBehaviour
     Dataset dataset;
     DatasetEnum dataEnum;
 
+    [HideInInspector]
+    int numCameraSets; 
     private void Start()
     {
     }
@@ -326,6 +328,9 @@ public class BatchProvider : MonoBehaviour
 
     public void InitBatchProvider()
     {
+        string infostr = GameObject.Find("Info").transform.GetChild(0).name.Split('_')[0];
+        numCameraSets = int.Parse(infostr.Split(':')[1]);
+
         var cmlShuffle = Helper.GetArg("-shuffle_data");
         if (cmlShuffle != null)
         {
@@ -336,11 +341,11 @@ public class BatchProvider : MonoBehaviour
         {
             importOptions.importMaterial = int.Parse(cmlImportMat) == 1;
         }
-        var cmlBatchSize = Helper.GetArg("-batch_size");
-        if (cmlBatchSize != null)
-        {
-            batchSize = int.Parse(cmlBatchSize);
-        }
+        //var cmlBatchSize = Helper.GetArg("-batch_size");
+        //if (cmlBatchSize != null)
+        //{
+        //    batchSize = int.Parse(cmlBatchSize);
+        //}
         var cmlBatchesReady = Helper.GetArg("-batches_ready");
         if (cmlBatchesReady != null)
         {
@@ -425,11 +430,11 @@ public class BatchProvider : MonoBehaviour
         dataset.RemoveRange(0, startFromObjectIdx);
         dataEnum = dataset.GetEnumerator();
 
-        if (batchSize == -1)
-        {
-            batchSize = dataset.Count;
-            batchesToHaveReady = 1;
-        }
+        //if (batchSize == -1)
+        //{
+        //    batchSize = dataset.Count;
+        //    batchesToHaveReady = 1;
+        //}
 
 
         for (int i = 0; i < batchesToHaveReady; i++)
@@ -455,7 +460,7 @@ public class BatchProvider : MonoBehaviour
     {
 
         counterLoadingBatches++;
-        var batch = new Batch(dataEnum, batchSize, importOptions, gameObject, this);
+        var batch = new Batch(dataEnum, numCameraSets, importOptions, gameObject, this);
     }
 
     public void StopIfNoneLeft()
@@ -566,7 +571,7 @@ public class BatchProviderEditor : Editor
         {
             base.OnInspectorGUI();
 
-            EditorGUILayout.BeginHorizontal();
+            //EditorGUILayout.BeginHorizontal();
             //EditorGUILayout.LabelField(new GUIContent("Batch Size"), GUILayout.Width(150));
             //int tmp = EditorGUILayout.IntField(SequenceBuildSceneCLI.numCameraSets, GUILayout.Width(40));
             //EditorGUILayout.EndHorizontal();
