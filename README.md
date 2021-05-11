@@ -119,6 +119,8 @@ By default, the tool will simply skip massive objects (composed by more than 100
 #### Other Options
 Other interesting options are self-explainatory. You can change the size of the output image (124 by default) in `Sequence Build Scene CLI` -> `Size Canvas`, the `Seed` in `Sequence Learning Task`, the variability of the lightning in `Change Lights each Iteration` (`false` by default)
 
+### Changing camera background or other Camera properties
+You can do it directly in Unity. Every Camera used in the tool is a clone of `Training Camera`, an object in the Hierarchy (there is also a `Candidate Camera` but you can ignore it). For example, change the background by clicking on the Camera Component and select `Background`.
 
 
 
