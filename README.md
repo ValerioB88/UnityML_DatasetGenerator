@@ -96,7 +96,7 @@ There is an abudance of options to personalize the way you want to generate the 
 
 #### Change the Camera Placement parameters
 By default the cameras are placed on a sphere centered on the object, at a distance of 4 meters from the center of the object (the ray of the sphere), and they cover an area that goes from 30 to 120 degrees in inclination, and the full sphere azimuth. You can have an idea of the area covered by looking at the green spheres (the "history" of the cameras). You may want to change this parameters.
-In `Sequence Learning Task` select `Camera Sphere Parameters`. You will be presented with an overwhelming (and mostly irrelevant amount of options). 
+In `Sequence Learning Task` select `Camera Sphere Parameters`. You will be presented with an overwhelming (and mostly irrelevant) amount of options. 
 The ones you may want to change are: `Distance`, `Min Center Point Incl T Cameras`, and `Max Center Point Incl T Cameras`. This will change the area covered longitudinally, and you can set it from 0 to 180. Similarly, the following two parameters, `Min Center Point Azi T Cameras` and `Max Center Point Azi T Cameras`, will change the space covered latitudinally (from 0 to 360).
 For example, setting these parameters to 4, 20, 30, 0, 180, will result in this type of camera placing:
 
