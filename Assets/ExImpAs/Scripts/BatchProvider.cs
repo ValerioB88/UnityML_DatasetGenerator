@@ -1,7 +1,10 @@
 ﻿using UnityEngine;
+using UnityEditor;
 using System.IO;
-using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Collections;
+using System.Linq;
 using System;
 
 using AsImpL;
@@ -64,7 +67,7 @@ public static class Helper
         {
             if (args[i] == name && args.Length > i + 1)
             {
-                Debug.Log(args[i] + ": " + args[i + 1]);
+                UnityEngine.Debug.Log(args[i] + ": " + args[i + 1]);
                 return args[i + 1];
             }
         }
@@ -85,7 +88,7 @@ public static class Helper
 
     public static void FileLog(string debugMsg, string filename = "debugLog.txt")
     {
-        string path = Application.dataPath + "/" + filename; 
+        string path = Application.dataPath + "/" + filename;
         StreamWriter sw = new StreamWriter(path, true);
         sw.WriteLine(debugMsg + "\n");
         sw.Close();
@@ -179,7 +182,7 @@ public class Batch
 
     public void OnImportError(string path)
     {
-        Debug.Log("<color=red>Error: FAILED TO LOAD: " + path + " </color>");
+        UnityEngine.Debug.Log("<color=red>Error: FAILED TO LOAD: " + path + " </color>");
         objectsLoading--;
         btp.objsLoading--;
         btp.totExcluded++;
@@ -190,7 +193,7 @@ public class Batch
     {
         btp = batchP;
         size = bSize;
-        
+
         BatchImportComplete += btp.BatchReady;
         NoObjectsLoaded += btp.BatchFailedToLoad;
         datasetEnum = dataEnum;
@@ -228,8 +231,8 @@ public class Batch
                 // The batch is still loading objects
                 return false;
             }
-           
-           else 
+
+            else
             {
                 //// if  (objectLoading == 0 && batchSize>0)
                 // The batch has finished
@@ -273,34 +276,37 @@ public class BatchProvider : MonoBehaviour
     int counterLoadingBatches = 0;
 
     [Tooltip("Leave list empty to use all classes")]
-    public List<string> selectClasses = new List<string> {};
+    public List<string> selectClasses = new List<string> { };
 
     [SerializeField]
     public string filePathDataset = "../data/3D/ShapeNetLimited";
 
-    [SerializeField]
-    private ImportOptions importOptions = new ImportOptions();
 
     public bool shuffleData = true;
 
     public Dictionary<int, string> idxClassToName = new Dictionary<int, string>();
     [HideInInspector]
     public int indexObjDataset = 0;
-
+    [HideInInspector]
     public int startFromObjectIdx = 0;
 
-    public int batchSize = 6; // Batch size of -1 indicates to load all the dataset
+    public int batchSize; // Batch size of -1 indicates to load all the dataset
     bool waitingForReady = false;
     string info = "";
     public event Action<Batch> ActionReady;
 
     public event Action RequestedExhaustedDataset;
 
+    [HideInInspector]
     public int batchesToHaveReady = 3;
     private bool isInit = false;
 
     [Tooltip("Set to -1 to use all objects")]
-    public int maxObjsPerClass = -1; 
+    [HideInInspector]
+    public int maxObjsPerClass = -1;
+
+    [SerializeField]
+    private ImportOptions importOptions = new ImportOptions();
 
     Dataset dataset;
     DatasetEnum dataEnum;
@@ -328,7 +334,7 @@ public class BatchProvider : MonoBehaviour
         var cmlImportMat = Helper.GetArg("-import_material");
         if (cmlImportMat != null)
         {
-             importOptions.importMaterial = int.Parse(cmlImportMat) == 1;
+            importOptions.importMaterial = int.Parse(cmlImportMat) == 1;
         }
         var cmlBatchSize = Helper.GetArg("-batch_size");
         if (cmlBatchSize != null)
@@ -364,12 +370,12 @@ public class BatchProvider : MonoBehaviour
         // Look in the dataset to create a DatasetList
         int classIdx = 0;
         var datasetDir = new DirectoryInfo(filePathDataset);
-        Debug.Log(datasetDir.FullName);
+        UnityEngine.Debug.Log(datasetDir.FullName);
 
         foreach (var classdir in datasetDir.GetDirectories())
         {
             bool foundClass = false;
-            int idxObjPerClass = 0; 
+            int idxObjPerClass = 0;
             if (selectClasses.Count > 0)
             {
                 foreach (var name in selectClasses)
@@ -402,7 +408,7 @@ public class BatchProvider : MonoBehaviour
                 }
                 tmpCat.Shuffle();
 
-                for (int i = 0; i < Mathf.Min(maxObjsPerClass == -1? tmpCat.Count : maxObjsPerClass, tmpCat.Count); i++)
+                for (int i = 0; i < Mathf.Min(maxObjsPerClass == -1 ? tmpCat.Count : maxObjsPerClass, tmpCat.Count); i++)
                 {
                     dataset.Add(tmpCat[i], classIdx);
                 }
@@ -435,13 +441,13 @@ public class BatchProvider : MonoBehaviour
 
     public void BatchReady(Batch batch)
     {
-        Destroy(batch.batchImporter);
+        GameObject.Destroy(batch.batchImporter);
         counterLoadingBatches--;
         ready.Enqueue(batch);
     }
     public void BatchFailedToLoad(Batch batch)
     {
-        Destroy(batch.batchImporter);
+        GameObject.Destroy(batch.batchImporter);
         counterLoadingBatches--;
         StopIfNoneLeft();
     }
@@ -456,7 +462,7 @@ public class BatchProvider : MonoBehaviour
     {
         if (ready.Count == 0 && counterLoadingBatches == 0)
         {
-            Debug.Log("Dataset Exhausted");
+            UnityEngine.Debug.Log("Dataset Exhausted");
             RequestedExhaustedDataset();
         }
     }
@@ -464,11 +470,11 @@ public class BatchProvider : MonoBehaviour
 
     public IEnumerator StartWhenReady()
     {
-  
+
         Resources.UnloadUnusedAssets();
         if (waitingForReady)
         {
-            Debug.Log("Already waiting for a batch");
+            UnityEngine.Debug.Log("Already waiting for a batch");
             yield break;
         }
         if (ready.Count > 0)
@@ -481,7 +487,7 @@ public class BatchProvider : MonoBehaviour
             waitingForReady = true;
             yield return new WaitUntil(() => ready.Count > 0);
             waitingForReady = false;
-            
+
             ProvideBatch();
         }
     }
@@ -511,11 +517,11 @@ public class BatchProvider : MonoBehaviour
     }
     private void printInfo()
     {
-        string tmpInfo = "ProvidedB: " + batchProvided + "; LoadingB: " + counterLoadingBatches + "; ReadyB: " + ready.Count +  "; LoadingO: " + objsLoading + ";  ReadyO: " + objsReady + " ; ObjsProvided: " + objsProvided + "; ObjsExtracted: " + objsExtracted + ";  ObjsTot: " + TotObjects + "; ObjExcluded: " + totExcluded + "\nPercCompleted: " + 100*objsProvided/(float)TotObjects + "%";
+        string tmpInfo = "ProvidedB: " + batchProvided + "; LoadingB: " + counterLoadingBatches + "; ReadyB: " + ready.Count + "; LoadingO: " + objsLoading + ";  ReadyO: " + objsReady + " ; ObjsProvided: " + objsProvided + "; ObjsExtracted: " + objsExtracted + ";  ObjsTot: " + TotObjects + "; ObjExcluded: " + totExcluded + "\nPercCompleted: " + 100 * objsProvided / (float)TotObjects + "%";
         if (tmpInfo != info)
         {
             info = tmpInfo;
-            Debug.Log(info);
+            UnityEngine.Debug.Log(info);
         }
     }
 
@@ -538,3 +544,60 @@ public class BatchProvider : MonoBehaviour
 
 
 }
+
+
+
+#if UNITY_EDITOR
+[ExecuteInEditMode]
+[CustomEditor(typeof(BatchProvider))]
+public class BatchProviderEditor : Editor
+{
+    bool advancedOptions = false;
+    SequenceBuildSceneCLI seq; 
+    private BatchProvider bp;
+    public void OnEnable()
+    {
+        bp = (BatchProvider)target;
+        seq = GameObject.Find("Agent").GetComponent<SequenceBuildSceneCLI>();
+    }
+    public override void OnInspectorGUI()
+    {
+        if (!Application.isPlaying)
+        {
+            base.OnInspectorGUI();
+
+            EditorGUILayout.BeginHorizontal();
+            //EditorGUILayout.LabelField(new GUIContent("Batch Size"), GUILayout.Width(150));
+            //int tmp = EditorGUILayout.IntField(SequenceBuildSceneCLI.numCameraSets, GUILayout.Width(40));
+            //EditorGUILayout.EndHorizontal();
+
+            //if (tmp != SequenceBuildSceneCLI.numCameraSets)
+            //{
+            //    SequenceBuildSceneCLI.numCameraSets = tmp;
+            //    SequenceBuildSceneCLI.UpdateComponents();
+            //}
+
+
+            advancedOptions = EditorGUILayout.Foldout(advancedOptions, "Advanced Options");
+            if (advancedOptions)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Start from Object Index"), GUILayout.Width(150));
+                bp.startFromObjectIdx = EditorGUILayout.IntField(bp.startFromObjectIdx, GUILayout.Width(40));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Batches to have ready"), GUILayout.Width(150));
+                bp.batchesToHaveReady = EditorGUILayout.IntField(bp.batchesToHaveReady, GUILayout.Width(40));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("Max Objects per Class", "Set to -1 to use all objects in folder"), GUILayout.Width(150));
+                bp.maxObjsPerClass = EditorGUILayout.IntField(bp.maxObjsPerClass, GUILayout.Width(40));
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+    }
+}
+
+#endif

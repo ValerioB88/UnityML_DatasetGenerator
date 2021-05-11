@@ -67,7 +67,7 @@ public class SequenceLearningTask : Agent
     int numSc = 1;
     int numFt = 4;
     int numFc = 1;
-    int K = 2;
+    int numCameraSets = 2;
     int sizeCanvas = 64;
 
     int indexBatch = -1;
@@ -191,10 +191,6 @@ public class SequenceLearningTask : Agent
     public enum PlaceCamerasMode
     {
         RND,
-        DET_EDELMAN_SAME_AXIS_HOR,
-        DET_EDELMAN_ORTHO_HOR,
-        DET_EDELMAN_SAME_AXIS_VER,
-        DET_EDELMAN_ORTHO_VER,
         FROM_CHANNEL,
         REPEAT_SEQUENTIAL
     }
@@ -257,18 +253,17 @@ public class SequenceLearningTask : Agent
 
         string infostr = info.transform.GetChild(0).name;
         var tmp = infostr.Split('_');
-        K = int.Parse(tmp[0].Split(':')[1]);
+        numCameraSets = int.Parse(tmp[0].Split(':')[1]);
         numSt = int.Parse(tmp[1].Split(':')[1]);
         numSc = int.Parse(tmp[2].Split(':')[1]);
         numFt = int.Parse(tmp[3].Split(':')[1]);
         numFc = int.Parse(tmp[4].Split(':')[1]);
         sizeCanvas = int.Parse(tmp[5].Split(':')[1]);
-        //sendDebugLogChannel.SendEnvInfoToPython("UNITIY COMPTMP : " + trainCompType);
 
-        sendDebugLogChannel.SendEnvInfoToPython("SLT From Unity Info: \nK: " + K.ToString() + " St: " + numSt.ToString() + " Sc: " + numSc.ToString() + " Ft: " + numFt.ToString() + " Fc: " + numFc.ToString() + " size_canvas: " + sizeCanvas.ToString());
+        sendDebugLogChannel.SendEnvInfoToPython("SLT From Unity Info: \nK: " + numCameraSets.ToString() + " St: " + numSt.ToString() + " Sc: " + numSc.ToString() + " Ft: " + numFt.ToString() + " Fc: " + numFc.ToString() + " size_canvas: " + sizeCanvas.ToString());
         int totIndex = 0;
         string tmpName;
-        for (int k = 0; k < K; k++)
+        for (int k = 0; k < numCameraSets; k++)
         {
             gizmoPointHistoryCenterRelativeCT.Add(new List<Vector3>());
             training.Add(new ObjectCameraSet(0, 0));
@@ -289,7 +284,7 @@ public class SequenceLearningTask : Agent
         totIndex = 0;
         if (numSc > 0)
         {
-            for (int k = 0; k < K; k++)
+            for (int k = 0; k < numCameraSets; k++)
             {
                 candidates.Add(new ObjectCameraSet(0, 0));
                 for (int sc = 0; sc < numSc; sc++)
@@ -394,21 +389,14 @@ public class SequenceLearningTask : Agent
         envParams = Academy.Instance.EnvironmentParameters;
 
 
-        // TEST EDELMAN
-        if ((placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR || this.placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR) && (K != 1 || numSt != 2 || numFt != 3 || numSc != 1 || numFc != 1))
-        {
-            string Str = "UNITY >> TrialType [TEST_EDELMAN] is designed to work only for K = 1, numSt = 2, numFt = 3. Build the scene again!";
-            sendDebugLogChannel.SendEnvInfoToPython(Str);
-            //Assert.IsTrue(false, Str);
-            K = 1;
-        }
+        
         // TEST GOKER
-        if ((placeCameraMode == PlaceCamerasMode.FROM_CHANNEL || getLabelsMode == GetLabelsMode.FROM_CHANNEL) && (K != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
+        if ((placeCameraMode == PlaceCamerasMode.FROM_CHANNEL || getLabelsMode == GetLabelsMode.FROM_CHANNEL) && (numCameraSets != 1 || numSt != 1 || numFt != 1 || numSc != 1 || numFc != 1))
         {
             string Str = "UNITY >> PlaceCameraMode/GetLabelsMode [FROM CHANNEL] is designed to work only for K = 1, numSt = 1, numFt = 1. Build the scene again!";
             sendDebugLogChannel.SendEnvInfoToPython(Str);
             //Assert.IsTrue(false, Str);
-            K = 1;
+            numCameraSets = 1;
         }       
 
 
@@ -714,11 +702,11 @@ public class SequenceLearningTask : Agent
         //trainingIndexSelectedObjects.Clear();
         //debugRotation.Clear();
 
-        if (numEpisodes % 300 == 0)
+        if (numEpisodes % 100 == 0)
         {
             gizmoMiddlePointsSequenceT.Clear();
             gizmoMiddlePointsSequenceC.Clear();
-            for (int k = 0; k < K; k++)
+            for (int k = 0; k < numCameraSets; k++)
             {
                 gizmoPointHistoryCenterRelativeCT[k].Clear();
             }
@@ -842,6 +830,8 @@ public class SequenceLearningTask : Agent
             //UnityEngine.Debug.Log("DELTA: " + delta);
             azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
             inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
+            inclGridPoints.Add(inclinationSequence);
+            aziGridPoints.Add(azimuthSequence);
 
             middlePointSequenceT = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
             gizmoMiddlePointsSequenceT.Add(middlePointSequenceT + objPosT);
@@ -863,112 +853,7 @@ public class SequenceLearningTask : Agent
         gizmoPointHistoryCenterRelativeCT[k].Add(diffPos + objPosT);
     }
 
-    public void SetCameraPositionEdelman(int k, int trainingObjIdx, int candidateObjIdx)
-    {
-        int candidateCamDegree = (int)envParams.GetWithDefault("degree", (numEpisodes - 1) * 10); //(numEpisodes - 1) * 10);
-        int candidateCamRotation = (int)envParams.GetWithDefault("rotation", 10 * (((numEpisodes - 1) * 10) / 360));
-
-        candidateCamRotation = candidateCamRotation % 360;
-        candidateCamDegree = candidateCamDegree % 360;
-
-        var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
-        var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
-
-        var objPosC = batchDatasetList[candidateObjIdx].gm.transform.position;
-        var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
-
-        List<Vector3> positionsTcameras = new List<Vector3>();
-
-        int sc = 0;
-        int fsc = 0;
-        Vector3 positionObj = new Vector3(0f, 0f, 0f);
-        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR)
-        {
-            positionObj = GetPositionAroundSphere(90, candidateCamRotation + candidateCamDegree, Vector3.up) * simParams.distance;
-        }
-
-        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_VER)
-        {
-            positionObj = GetPositionAroundSphere(90 + candidateCamRotation, (90 + candidateCamRotation) % 360 > 180 ? candidateCamDegree + 180 : candidateCamDegree, Vector3.up) * simParams.distance;
-        }
-        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR)
-        {
-            int rotation_ortho = candidateCamRotation;
-            if (candidateCamDegree > 90 && candidateCamDegree < 270)
-            {
-                rotation_ortho += 180;
-            }
-            UnityEngine.Debug.Log("D: " + (90 + candidateCamDegree).ToString() + "R: " + candidateCamRotation);
-            positionObj = GetPositionAroundSphere(90 + candidateCamDegree, rotation_ortho, Vector3.up) * simParams.distance;
-
-        }
-
-        if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER)
-        {
-            positionObj = GetPositionAroundSphere(90 + candidateCamRotation + candidateCamDegree, (90 + candidateCamRotation + candidateCamDegree) % 360 > 180 ? 180 : 0, Vector3.up) * simParams.distance;
-
-        }
-
-
-        candidates[k].sequences[sc].cameraObjs[fsc].transform.position = objPosC + positionObj;
-        candidates[k].sequences[sc].cameraObjs[fsc].transform.LookAt(objToLookAtC, Vector3.up);
-        //candidates[k].sequences[sc].frames[fsc].GetComponent<Camera>().cullingMask = 1 << (8 + candidateObjIdx);
-        cameraPositions.Add(candidates[k].sequences[sc].cameraObjs[fsc].transform.position - objPosC);
-
-        for (int st = 0; st < numSt; st++)
-        {
-            if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR || placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR)
-            {
-                if (st == 0)
-                {
-                    positionsTcameras.Clear();
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 15, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 0, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation - 15, Vector3.up) * simParams.distance);
-
-                }
-                if (st == 1)
-                {
-                    positionsTcameras.Clear();
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 60, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 75, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(90, candidateCamRotation + 90, Vector3.up) * simParams.distance);
-
-                }
-            }
-
-            if (placeCameraMode == PlaceCamerasMode.DET_EDELMAN_ORTHO_VER || placeCameraMode == PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER)
-            {
-                if (st == 0)
-                {
-
-                    positionsTcameras.Clear();
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 75, (candidateCamRotation + 75) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 90, (candidateCamRotation + 90) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 105, (candidateCamRotation + 105) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-
-                }
-                if (st == 1)
-                {
-                    positionsTcameras.Clear();
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 0, (candidateCamRotation + 0) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 15, (candidateCamRotation + 15) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-                    positionsTcameras.Add(GetPositionAroundSphere(candidateCamRotation + 30, (candidateCamRotation + 30) % 360 < 180 ? 0 : 180, Vector3.up) * simParams.distance);
-                    //UnityEngine.Debug.Log("ROTATION: " + candidateCamRotation);
-
-                }
-            }
-
-            for (int fst = 0; fst < numFt; fst++)
-            {
-                training[k].sequences[st].cameraObjs[fst].transform.position = objPosT + positionsTcameras[fst];
-                training[k].sequences[st].cameraObjs[fst].transform.LookAt(objToLookAtT);
-                cameraPositions.Add(training[k].sequences[st].cameraObjs[fst].transform.position - objPosT);
-
-            }
-        }
-    }
-
+   
     public void SetRepeatedCameraSequence(int k, int trainingObjIdx, int candidateObjIdx)
     {
         var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
@@ -977,6 +862,8 @@ public class SequenceLearningTask : Agent
         training[k].sequences[0].cameraObjs[0].transform.position = objPosT + positionCamT;
         training[k].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtT, Vector3.up);
         cameraPositions.Add(training[k].sequences[0].cameraObjs[0].transform.position - objPosT);
+        gizmoMiddlePointsSequenceC.Add(objPosT + positionCamT);
+
 
     }
     public void SetStaticCameraPositionFromPython(int k, int trainingObjIdx, int candidateObjIdx)
@@ -1057,7 +944,7 @@ public class SequenceLearningTask : Agent
 
         ClearVarForEpisode();
 
-        for (int k = 0; k < K; k++)
+        for (int k = 0; k < numCameraSets; k++)
         {
             int trainingObjIdx = -1;
             int candidateObjIdx = -1;
@@ -1101,12 +988,6 @@ public class SequenceLearningTask : Agent
             {
                 case PlaceCamerasMode.RND:
                     SetCameraPositionsRandom(k, trainingObjIdx, candidateObjIdx);
-                    break;
-                case PlaceCamerasMode.DET_EDELMAN_ORTHO_HOR:
-                case PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_HOR:
-                case PlaceCamerasMode.DET_EDELMAN_SAME_AXIS_VER:
-                case PlaceCamerasMode.DET_EDELMAN_ORTHO_VER:
-                    SetCameraPositionEdelman(k, trainingObjIdx, candidateObjIdx);
                     break;
                 case PlaceCamerasMode.FROM_CHANNEL:
                     SetStaticCameraPositionFromPython(k, trainingObjIdx, candidateObjIdx);
@@ -1174,11 +1055,7 @@ public class SequenceLearningTask : Agent
                         var camera = cameraObj.GetComponent<Camera>();
                         var texture = CameraSensor.ObservationToTexture(camera, sizeCanvas, sizeCanvas);
                         var compressed = texture.EncodeToPNG();
-                        //string imageName = append + imgsSaved + "_O" + +objCamera.objIdx + "_B" + indexBatch + "_K" + idxCameraSet + "_S" + indexSeq + "_C" + indexCam + "_r" + (batchRepeated - 1);
-                        if (objCamera.objIdx == 3)
-                        {
-                            int stop = 1;
-                        }
+                        
                         string imageName = "O" + objCamera.objIdx + "_I" + inclGridPoints[batchRepeated - 1] + "_A" + aziGridPoints[batchRepeated - 1];
                         File.WriteAllBytes(Path.Combine(new string[] { Application.dataPath, "..", saveDatasetDir, 
                             useBatchProvider? batchProvider.idxClassToName[objCamera.classIdx]:objCamera.classIdx.ToString(),
@@ -1205,7 +1082,7 @@ public class SequenceLearningTask : Agent
         }
         if (batchRepeated - 1 == 0)
         {
-            msg += "Image Saved: " + imgsSaved + ", ObjSaved:" + batchProvider.batchProvided * Mathf.Min(batchProvider.batchSize, K) + "/" + batchProvider.TotObjects;
+            msg += "Image Saved: " + imgsSaved + ", ObjSaved:" + batchProvider.batchProvided * Mathf.Min(batchProvider.batchSize, numCameraSets) + "/" + batchProvider.TotObjects;
             UnityEngine.Debug.Log(msg);
             Helper.FileLog(msg, filename: "debugLog" + seed + ".txt");
         }
@@ -1264,6 +1141,8 @@ public class SequenceMLtaskEditor : Editor
         if (!Application.isPlaying)
         {   
             base.OnInspectorGUI();
+
+            //advancedCameraGrouping = EditorGUILayout.Foldout(advancedCameraGrouping, "Advanced Option for Cameras Grouping");
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Gizmo Camera History"), GUILayout.Width(180));
             slt.GizmoCamHistory = EditorGUILayout.Toggle(slt.GizmoCamHistory) == true;
@@ -1315,7 +1194,7 @@ public class SequenceMLtaskEditor : Editor
                 s.normal.textColor = Color.red;
                 EditorGUILayout.EndHorizontal();
                 EditorGUI.indentLevel--;
-                GUILayout.Label("Remember to use numSt and numFt=1,\nand the rest=0.\nK should almost always be the same as BatchSize", s);
+                GUILayout.Label("Remember to use numSt and numFt=1,\nand the rest=0.\nCamera Sets should almost always be the same as BatchSize", s);
                 slt.repeatSameBatch = slt.numGridPointIncl * slt.numGridPointAzi;
 
 

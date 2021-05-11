@@ -185,7 +185,7 @@ public class BuildSettingsEditor : Editor
 
     //[CanEditMultipleObjects]
 
-    int K;
+    int numCameraSets;
     int numSt;
     int numSc;
     int numFt;
@@ -203,7 +203,7 @@ public class BuildSettingsEditor : Editor
         GameObject info = GameObject.Find("Info");
         string infostr = info.transform.GetChild(0).name;
         var tmp = infostr.Split('_');
-        K = int.Parse(tmp[0].Split(':')[1]);
+        numCameraSets = int.Parse(tmp[0].Split(':')[1]);
         numSt = int.Parse(tmp[1].Split(':')[1]);
         numSc = int.Parse(tmp[2].Split(':')[1]);
         numFt = int.Parse(tmp[3].Split(':')[1]);
@@ -220,7 +220,7 @@ public class BuildSettingsEditor : Editor
         if (!Application.isPlaying)
         {
             base.OnInspectorGUI();
-
+            int tmp; 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Size Canvas"), GUILayout.Width(80));
             sizeCanvas = EditorGUILayout.IntSlider(sizeCanvas, 10, 250);
@@ -232,52 +232,66 @@ public class BuildSettingsEditor : Editor
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Camera sets"), GUILayout.Width(75));
-            K = EditorGUILayout.IntSlider(K, 1, 30);
+            tmp = EditorGUILayout.IntSlider(numCameraSets, 1, 30);
             EditorGUILayout.EndHorizontal();
-
+            if (tmp != numCameraSets)
+            {
+                numCameraSets = tmp;
+                unsavedChanges = true;
+            }
             advancedCameraGrouping = EditorGUILayout.Foldout(advancedCameraGrouping, "Advanced Option for Cameras Grouping");
             if (advancedCameraGrouping)
-                if (Selection.activeTransform)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("numSt"), GUILayout.Width(60));
+                tmp = EditorGUILayout.IntSlider(numSt, 1, 5);
+                if (tmp != numSt)
+                {
+                    numSt = tmp;
+                    unsavedChanges = true;
+                }
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(new GUIContent("numSc"), GUILayout.Width(60));
+
+                tmp = EditorGUILayout.IntSlider(numSc, 0, 5);
+                if (tmp != numSc)
+                {
+                    numSc = tmp;
+                    unsavedChanges = true;
+                }
+                EditorGUILayout.EndHorizontal();
+                if (numSt > 0)
                 {
                     EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(new GUIContent("numSt"), GUILayout.Width(60));
-                    numSt = EditorGUILayout.IntSlider(numSt, 1, 5);
-                    EditorGUILayout.EndHorizontal();
-
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(new GUIContent("numSc"), GUILayout.Width(60));
-                    numSc = EditorGUILayout.IntSlider(numSc, 0, 5);
-                    EditorGUILayout.EndHorizontal();
-                    if (numSt > 0)
+                    EditorGUILayout.LabelField(new GUIContent("numFt"), GUILayout.Width(60));
+                    tmp = EditorGUILayout.IntSlider(numFt, 1, 10);
+                    if (tmp != numFt)
                     {
-                        EditorGUILayout.BeginHorizontal();
-                        EditorGUILayout.LabelField(new GUIContent("numFt"), GUILayout.Width(60));
-                        numFt = EditorGUILayout.IntSlider(numFt, 1, 10);
-                        EditorGUILayout.EndHorizontal();
+                        numFt = tmp;
+                        unsavedChanges = true;
                     }
-                    if (numSc > 0)
-                    {
-                        EditorGUILayout.BeginHorizontal();
-                        EditorGUILayout.LabelField(new GUIContent("numFc"), GUILayout.Width(60));
-                        numFc = EditorGUILayout.IntSlider(numFc, 1, 10);
-                        EditorGUILayout.EndHorizontal();
-                    }
-
-
+                    EditorGUILayout.EndHorizontal();
                 }
-
-
-
+                if (numSc > 0)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(new GUIContent("numFc"), GUILayout.Width(60));
+                    tmp = EditorGUILayout.IntSlider(numFc, 1, 10);
+                    if (tmp != numFc)
+                    {
+                        numFc = tmp;
+                        unsavedChanges = true;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            }
             if (unsavedChanges)
             {
                 GUIStyle s = new GUIStyle(EditorStyles.label);
                 s.normal.textColor = Color.red;
                 GUILayout.Label("Changed.", s);
-            }
-
-            if (GUI.changed)
-            {
-                unsavedChanges = true;
             }
 
             EditorGUILayout.BeginHorizontal();
@@ -287,7 +301,7 @@ public class BuildSettingsEditor : Editor
                 SequenceBuildSceneCLI.numFc = numFc;
                 SequenceBuildSceneCLI.numFt = numFt;
                 SequenceBuildSceneCLI.numSc = numSc;
-                SequenceBuildSceneCLI.numCameraSets = K;
+                SequenceBuildSceneCLI.numCameraSets = numCameraSets;
                 SequenceBuildSceneCLI.sizeCanvas = sizeCanvas;
                 SequenceBuildSceneCLI.grayscale = grayscale;
                 SequenceBuildSceneCLI.UpdateComponents();
