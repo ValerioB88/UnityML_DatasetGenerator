@@ -212,7 +212,6 @@ public class BuildSettingsEditor : Editor
         infoDTA = info.transform.GetChild(1).gameObject;
         string infoDTAstr = infoDTA.name;
         datasetToAdjust = GameObject.Find(infoDTAstr.Split(':')[1]);
-        UnityEngine.Debug.Log("CIAO");
 
         if (!Application.isPlaying && (numCameraSets != SequenceBuildSceneCLI.numCameraSets || numSt != SequenceBuildSceneCLI.numSt || numFt != SequenceBuildSceneCLI.numFt 
             || numFc != SequenceBuildSceneCLI.numFc || sizeCanvas != SequenceBuildSceneCLI.sizeCanvas || grayscale != SequenceBuildSceneCLI.grayscale))

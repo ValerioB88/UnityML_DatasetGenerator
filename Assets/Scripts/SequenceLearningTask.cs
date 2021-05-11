@@ -40,7 +40,7 @@ public class SequenceLearningTask : Agent
     public bool GizmoAreaMidPoints = true;
     
     [HideInInspector]
-    public bool changeLightsEachTrial = false;
+    public bool changeLightsEachIteration = false;
     
     StringLogSideChannel sendEnvParamsChannel;
     StringLogSideChannel sendDebugLogChannel;
@@ -137,7 +137,7 @@ public class SequenceLearningTask : Agent
     public List<float> inclGridPoints = new List<float>();
 
     public int seed = 3;
-    public CameraSphereParams simParams = new CameraSphereParams();
+    public CameraSphereParams cameraSphereParams = new CameraSphereParams();
 
     public void SetLayerRecursively(GameObject obj, int newLayer)
     {
@@ -365,7 +365,7 @@ public class SequenceLearningTask : Agent
         var cmlChangeLights = Helper.GetArg("-change_lights");
         if (cmlChangeLights != null)
         {
-            changeLightsEachTrial = int.Parse(cmlChangeLights) == 1;
+            changeLightsEachIteration = int.Parse(cmlChangeLights) == 1;
         }
     
         
@@ -379,7 +379,8 @@ public class SequenceLearningTask : Agent
             batchProvider.ActionReady += PrepareAndStartEpisode;
             batchProvider.RequestedExhaustedDataset += QuitApplication;
             sendEnvParamsChannel.SendEnvInfoToPython((numCameraSets).ToString());  // this is not totally accurate, but it's what needed most of the time
-            GameObject.Find("DATASETS").SetActive(false);
+            if (GameObject.Find("DATASET") != null)
+             GameObject.Find("DATASETS").SetActive(false);
         }
         else
         { 
@@ -414,16 +415,16 @@ public class SequenceLearningTask : Agent
             {
                 for (int j = 0; j < numGridPointIncl; j++)
                 {
-                    aziGridPoints.Add(simParams.minCenterPointAziTcameras + (simParams.maxCenterPointAziTcameras - simParams.minCenterPointAziTcameras) / numGridPointAzi * i);
+                    aziGridPoints.Add(cameraSphereParams.minCenterPointAziTcameras + (cameraSphereParams.maxCenterPointAziTcameras - cameraSphereParams.minCenterPointAziTcameras) / numGridPointAzi * i);
 
-                    inclGridPoints.Add(simParams.minCenterPointInclTcameras + (simParams.maxCenterPointInclTcameras - simParams.minCenterPointInclTcameras) / numGridPointIncl * j);
+                    inclGridPoints.Add(cameraSphereParams.minCenterPointInclTcameras + (cameraSphereParams.maxCenterPointInclTcameras - cameraSphereParams.minCenterPointInclTcameras) / numGridPointIncl * j);
                 }
             }
         }
 
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> placeCameraMode: " + placeCameraMode.ToString());
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> getLabelsMode: " + getLabelsMode.ToString());
-        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> changeLightsEachTrials: " + changeLightsEachTrial.ToString());
+        sendDebugLogChannel.SendEnvInfoToPython("UNITY>> changeLightsEachTrials: " + changeLightsEachIteration.ToString());
         sendDebugLogChannel.SendEnvInfoToPython("UNITY>> trainComparisonType: " + trainCompType.ToString());
 
         GameObject tmpL = GameObject.Find("Lights").gameObject;
@@ -551,15 +552,15 @@ public class SequenceLearningTask : Agent
             foreach (var obj in gizmoTrainingObj)
             {
                 Gizmos.color = new Vector4(153 / 255F, 51 / 255F, 1F, 0.2F);
-                Gizmos.DrawWireSphere(obj.transform.position, simParams.distance);
-                Gizmos.DrawSphere(obj.transform.position, simParams.distance);
+                Gizmos.DrawWireSphere(obj.transform.position, cameraSphereParams.distance);
+                Gizmos.DrawSphere(obj.transform.position, cameraSphereParams.distance);
 
             }
             foreach (var obj in gizmoCandidateObjs)
             {
                 Gizmos.color = new Vector4(153 / 255F, 51 / 255F, 1F, 0.2F);
-                Gizmos.DrawWireSphere(obj.transform.position, simParams.distance);
-                Gizmos.DrawSphere(obj.transform.position, simParams.distance);
+                Gizmos.DrawWireSphere(obj.transform.position, cameraSphereParams.distance);
+                Gizmos.DrawSphere(obj.transform.position, cameraSphereParams.distance);
 
             }
 
@@ -725,7 +726,7 @@ public class SequenceLearningTask : Agent
 
         candidateObjIdx = trainingObjIdx;
 
-        if (Random.Range(0f, 1f) > simParams.probMatching && batchDatasetList.Count > 1)
+        if (Random.Range(0f, 1f) > cameraSphereParams.probMatching && batchDatasetList.Count > 1)
         {
             do
             {
@@ -778,36 +779,36 @@ public class SequenceLearningTask : Agent
         var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
 
 
-        float azimuthCenterPointT = RandomAngle(simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-        float inclinationCenterPointT = RandomAngle(simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
-        var middlePointTarea = GetPositionAroundSphere(inclinationCenterPointT, azimuthCenterPointT, Vector3.up) * simParams.distance;
+        float azimuthCenterPointT = RandomAngle(cameraSphereParams.minCenterPointAziTcameras, cameraSphereParams.maxCenterPointAziTcameras, cameraSphereParams.minCenterPointAziTcameras, cameraSphereParams.maxCenterPointAziTcameras);
+        float inclinationCenterPointT = RandomAngle(cameraSphereParams.minCenterPointInclTcameras, cameraSphereParams.maxCenterPointInclTcameras, cameraSphereParams.minCenterPointInclTcameras, cameraSphereParams.maxCenterPointInclTcameras);
+        var middlePointTarea = GetPositionAroundSphere(inclinationCenterPointT, azimuthCenterPointT, Vector3.up) * cameraSphereParams.distance;
         gizmoMiddlePointsAreaT.Add(middlePointTarea + objPosT);
 
         float azimuthSequence = 0f;
         float inclinationSequence = 0f;
-        var delta = Random.Range(simParams.minDegreeFrames, simParams.maxDegreeFrames);
+        var delta = Random.Range(cameraSphereParams.minDegreeFrames, cameraSphereParams.maxDegreeFrames);
 
 
         if (numSc > 0)
         {
-            float azimuthCenterPointC = RandomAngle(azimuthCenterPointT + simParams.minAziTCcameras,
-                                               azimuthCenterPointT + simParams.maxAziTCcameras,
-                                               simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-            float inclinationCenterPointC = RandomAngle(inclinationCenterPointT + simParams.minInclTCcameras,
-                                                        inclinationCenterPointT + simParams.maxInclTCcameras,
-                                                        simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
+            float azimuthCenterPointC = RandomAngle(azimuthCenterPointT + cameraSphereParams.minAziTCcameras,
+                                               azimuthCenterPointT + cameraSphereParams.maxAziTCcameras,
+                                               cameraSphereParams.minCenterPointAziCcameras, cameraSphereParams.maxCenterPointAziCcameras);
+            float inclinationCenterPointC = RandomAngle(inclinationCenterPointT + cameraSphereParams.minInclTCcameras,
+                                                        inclinationCenterPointT + cameraSphereParams.maxInclTCcameras,
+                                                        cameraSphereParams.minCenterPointInclCcameras, cameraSphereParams.maxCenterPointInclCcameras);
             var objPosC = batchDatasetList[candidateObjIdx].gm.transform.position;
             var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
 
-            var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * simParams.distance;
+            var middlePointCarea = GetPositionAroundSphere(inclinationCenterPointC, azimuthCenterPointC, Vector3.up) * cameraSphereParams.distance;
             gizmoMiddlePointsAreaC.Add(middlePointCarea + objPosC);
 
             for (int sc = 0; sc < numSc; sc++)
             {
-                azimuthSequence = RandomAngle(azimuthCenterPointC - simParams.areaAziCcameras / 2F, azimuthCenterPointC + simParams.areaAziCcameras / 2F, simParams.minCenterPointAziCcameras, simParams.maxCenterPointAziCcameras);
-                inclinationSequence = RandomAngle(inclinationCenterPointC - simParams.areaInclCcameras / 2F, inclinationCenterPointC + simParams.areaInclCcameras / 2F, simParams.minCenterPointInclCcameras, simParams.maxCenterPointInclCcameras);
+                azimuthSequence = RandomAngle(azimuthCenterPointC - cameraSphereParams.areaAziCcameras / 2F, azimuthCenterPointC + cameraSphereParams.areaAziCcameras / 2F, cameraSphereParams.minCenterPointAziCcameras, cameraSphereParams.maxCenterPointAziCcameras);
+                inclinationSequence = RandomAngle(inclinationCenterPointC - cameraSphereParams.areaInclCcameras / 2F, inclinationCenterPointC + cameraSphereParams.areaInclCcameras / 2F, cameraSphereParams.minCenterPointInclCcameras, cameraSphereParams.maxCenterPointInclCcameras);
 
-                middlePointSequenceC = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+                middlePointSequenceC = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * cameraSphereParams.distance;
 
                 var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1f, 1f)));
 
@@ -826,12 +827,12 @@ public class SequenceLearningTask : Agent
         for (int st = 0; st < numSt; st++)
         {
             //UnityEngine.Debug.Log("DELTA: " + delta);
-            azimuthSequence = RandomAngle(azimuthCenterPointT - simParams.areaAziTcameras / 2F, azimuthCenterPointT + simParams.areaAziTcameras / 2F, simParams.minCenterPointAziTcameras, simParams.maxCenterPointAziTcameras);
-            inclinationSequence = RandomAngle(inclinationCenterPointT - simParams.areaInclTcameras / 2F, inclinationCenterPointT + simParams.areaInclTcameras / 2F, simParams.minCenterPointInclTcameras, simParams.maxCenterPointInclTcameras);
+            azimuthSequence = RandomAngle(azimuthCenterPointT - cameraSphereParams.areaAziTcameras / 2F, azimuthCenterPointT + cameraSphereParams.areaAziTcameras / 2F, cameraSphereParams.minCenterPointAziTcameras, cameraSphereParams.maxCenterPointAziTcameras);
+            inclinationSequence = RandomAngle(inclinationCenterPointT - cameraSphereParams.areaInclTcameras / 2F, inclinationCenterPointT + cameraSphereParams.areaInclTcameras / 2F, cameraSphereParams.minCenterPointInclTcameras, cameraSphereParams.maxCenterPointInclTcameras);
             inclGridPoints.Add((int)inclinationSequence);
             aziGridPoints.Add((int)azimuthSequence);
 
-            middlePointSequenceT = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * simParams.distance;
+            middlePointSequenceT = GetPositionAroundSphere(inclinationSequence, azimuthSequence, Vector3.up) * cameraSphereParams.distance;
             gizmoMiddlePointsSequenceT.Add(middlePointSequenceT + objPosT);
 
             var randomDirection = Vector3.Normalize(new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f)));
@@ -846,7 +847,7 @@ public class SequenceLearningTask : Agent
         }
         var diffAzi = azimuthCenterPointT - azimuthSequence;
         var diffIncl = inclinationCenterPointT - inclinationSequence;
-        var diffPos = simParams.distance * GetPositionAroundSphere(diffIncl + 90f, diffAzi - 90, Vector3.up);
+        var diffPos = cameraSphereParams.distance * GetPositionAroundSphere(diffIncl + 90f, diffAzi - 90, Vector3.up);
 
         gizmoPointHistoryCenterRelativeCT[k].Add(diffPos + objPosT);
     }
@@ -856,7 +857,7 @@ public class SequenceLearningTask : Agent
     {
         var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
         var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
-        var positionCamT = GetPositionAroundSphere(inclGridPoints[batchRepeated - 1], aziGridPoints[batchRepeated - 1], Vector3.up) * simParams.distance;
+        var positionCamT = GetPositionAroundSphere(inclGridPoints[batchRepeated - 1], aziGridPoints[batchRepeated - 1], Vector3.up) * cameraSphereParams.distance;
         training[k].sequences[0].cameraObjs[0].transform.position = objPosT + positionCamT;
         training[k].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtT, Vector3.up);
         cameraPositions.Add(training[k].sequences[0].cameraObjs[0].transform.position - objPosT);
@@ -873,7 +874,7 @@ public class SequenceLearningTask : Agent
             int trainingCamInclination = (int)envParams.GetWithDefault("inclinationT", (numEpisodes - 1) * 2);
             var objPosT = batchDatasetList[trainingObjIdx].gm.transform.position;
             var objToLookAtT = batchDatasetList[trainingObjIdx].gm.transform;
-            var positionCamT = GetPositionAroundSphere(trainingCamInclination, trainingCamAzimuth, Vector3.up) * simParams.distance;
+            var positionCamT = GetPositionAroundSphere(trainingCamInclination, trainingCamAzimuth, Vector3.up) * cameraSphereParams.distance;
             training[0].sequences[0].cameraObjs[0].transform.position = objPosT + positionCamT;
             training[0].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtT, Vector3.up);
             cameraPositions.Add(training[0].sequences[0].cameraObjs[0].transform.position - objPosT);
@@ -885,7 +886,7 @@ public class SequenceLearningTask : Agent
             var objToLookAtC = batchDatasetList[candidateObjIdx].gm.transform;
             int candidateCamInclination = (int)envParams.GetWithDefault("inclinationC", (numEpisodes - 1) * 10);
             int candidateCamAzimuth = (int)envParams.GetWithDefault("azimuthC", (numEpisodes - 1) * 10);
-            var positionCamC = GetPositionAroundSphere(candidateCamInclination, candidateCamAzimuth, Vector3.up) * simParams.distance;
+            var positionCamC = GetPositionAroundSphere(candidateCamInclination, candidateCamAzimuth, Vector3.up) * cameraSphereParams.distance;
 
             candidates[0].sequences[0].cameraObjs[0].transform.position = objPosC + positionCamC;
             candidates[0].sequences[0].cameraObjs[0].transform.LookAt(objToLookAtC, Vector3.up);
@@ -915,7 +916,7 @@ public class SequenceLearningTask : Agent
     public void setScene()
     {
         //UnityEngine.Debug.Log("SET SCENE" + batchRepeated);
-        if (changeLightsEachTrial)
+        if (changeLightsEachIteration)
         {
             for (int i = 0; i < lights.Count; i++)
             {
@@ -927,16 +928,16 @@ public class SequenceLearningTask : Agent
 
         if (newLevel == 1f)
         {
-            simParams.UpdateParameters(envParams);
-            sendDebugLogChannel.SendEnvInfoToPython("UNITY >> Parameters Updated: \nDistance [" + simParams.distance.ToString() + "]" +
-            "\nCenterPointInclTcameras: [" + simParams.minCenterPointInclTcameras + "," + simParams.maxCenterPointInclTcameras + "]" +
-            "\nCenterPointInclCcameras: [" + simParams.minCenterPointInclCcameras + "," + simParams.maxCenterPointInclCcameras + "]" +
-            "\nareaInclTcameras: [" + simParams.areaInclTcameras + "]" +
-            "\nareaAziTcameras: [" + simParams.areaAziTcameras + "]" +
-            "\nDegreeFrames: [" + simParams.minDegreeFrames + "," + simParams.maxDegreeFrames + "]" +
-            "\nareaInclCcameras: [" + simParams.areaInclCcameras + "]" +
-            "\nareaAziCcameras: [" + simParams.areaAziCcameras + "]" +
-            "\nprobMatching: [" + simParams.probMatching + "]" +
+            cameraSphereParams.UpdateParameters(envParams);
+            sendDebugLogChannel.SendEnvInfoToPython("UNITY >> Parameters Updated: \nDistance [" + cameraSphereParams.distance.ToString() + "]" +
+            "\nCenterPointInclTcameras: [" + cameraSphereParams.minCenterPointInclTcameras + "," + cameraSphereParams.maxCenterPointInclTcameras + "]" +
+            "\nCenterPointInclCcameras: [" + cameraSphereParams.minCenterPointInclCcameras + "," + cameraSphereParams.maxCenterPointInclCcameras + "]" +
+            "\nareaInclTcameras: [" + cameraSphereParams.areaInclTcameras + "]" +
+            "\nareaAziTcameras: [" + cameraSphereParams.areaAziTcameras + "]" +
+            "\nDegreeFrames: [" + cameraSphereParams.minDegreeFrames + "," + cameraSphereParams.maxDegreeFrames + "]" +
+            "\nareaInclCcameras: [" + cameraSphereParams.areaInclCcameras + "]" +
+            "\nareaAziCcameras: [" + cameraSphereParams.areaAziCcameras + "]" +
+            "\nprobMatching: [" + cameraSphereParams.probMatching + "]" +
             "\n<< UNITY.");
         }
 
@@ -1159,7 +1160,7 @@ public class SequenceMLtaskEditor : Editor
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(new GUIContent("Change Lights Each Trial"), GUILayout.Width(180));
-            slt.changeLightsEachTrial = EditorGUILayout.Toggle(slt.changeLightsEachTrial) == true;
+            slt.changeLightsEachIteration = EditorGUILayout.Toggle(slt.changeLightsEachIteration) == true;
             EditorGUILayout.EndHorizontal();
 
 
@@ -1277,18 +1278,17 @@ public class SequenceMLtaskEditor : Editor
                     s.normal.textColor = Color.red;
                     EditorGUI.indentLevel--;
                     GUILayout.Label("WATCH OUT! Dataset doesn't exist in /DATASETS", s);
+
                 }
                 else
                 {
                     int numObjects = GameObject.Find(slt.nameDataset).transform.childCount;
                     if (numObjects != SequenceBuildSceneCLI.numCameraSets)
                     {
-                        GUIStyle s = new GUIStyle(EditorStyles.label);
-                        s.normal.textColor = Color.red;
-                        EditorGUI.indentLevel--;
-                        GUILayout.Label("WATCH OUT! \nSelected Dataset contains " + numObjects + " objects,\nbut Camera Sets =  " + SequenceBuildSceneCLI.numCameraSets + ".\nThey should match.", s);
+                        SequenceBuildSceneCLI.numCameraSets = numObjects;
+                        SequenceBuildSceneCLI.UpdateComponents();
                     }
-                }
+                }   
             }
         }
     }
