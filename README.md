@@ -34,7 +34,7 @@ If you have a complex dataset on disk, such as ShapeNet, and you need to generat
 
 ## Method 1. Objects in the scene.
 This method is demoed in `Scene/Demo Dataset In The Scene`. 
-### Preparing the dataset.
+
 #### Step 1. Import the objects with the right structure.
 In the Hierarchy, you'll see an object called `DATASETS`, which contains some datasets. You can use them as templates. *If you just want to use them directly to see how everything work, go to Step 2.*
 To use your own objects, import them in the scene. You need to organize them in a structure similar to the one used here, eg:
