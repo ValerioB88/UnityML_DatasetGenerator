@@ -30,7 +30,7 @@ The tool is intended to be used within Unity directly, and all the options are l
 There are two ways you can build your dataset. In the first one, the datasets are objects in the Unity scene. In the second one, the dataset is on the disk. If you have few objects, let's say 10 of them, and you want to generate them without any separation in different categories, the first technique is the easiest one. 
 If you have a complex dataset on disk, such as ShapeNet, and you need to generate them following their original class structure, then you can use the second method.
 
-**You can create your first dataset straight away by opening one of the example scenes, `Scene/Demo Dataset In The Scene` or `Scene/Demo Dataset from Disk` and click Play. Do not delete any component in the scenes are they are necessary for the dataset generation. Use these scenes as template for you personalize generation.**
+**You can create your first dataset straight away by opening one of the example scenes, `Scene/Demo Dataset In The Scene` or `Scene/Demo Dataset from Disk` and click Play. Do not delete any component in the scenes as they are necessary for the dataset generation. Use these scenes as template for you personalized generation.**
 
 ## Method 1. Objects in the scene.
 This method is demoed in `Scene/Demo Dataset In The Scene`. 
